@@ -282,6 +282,7 @@ export function HotelSearchBanner({
   setLocation = () => {},
   hotelId = "",
   setHotelId = () => {},
+  selectedHotelName = "",
   destinations = ["Chennai", "Pondicherry", "Kodaikanal"],
   checkIn = "",
   checkOut = "",
@@ -494,7 +495,7 @@ export function HotelSearchBanner({
                   Location
                 </p>
                 <p className="text-xs sm:text-sm font-bold text-neutral-900 truncate">
-                  {location || "All Locations"}
+                  {selectedHotelName || location || "All Locations"}
                 </p>
               </div>
             </div>
@@ -542,7 +543,7 @@ export function HotelSearchBanner({
                 {/* Location */}
                 <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-900 truncate">
                   <MapPin size={13} className="text-[#D7A441] shrink-0" />
-                  <span className="truncate">{location || "All Locations"}</span>
+                  <span className="truncate">{selectedHotelName || location || "All Locations"}</span>
                 </div>
 
                 {/* Date Range & Guests */}
@@ -574,22 +575,20 @@ export function HotelSearchBanner({
           </div>
         </div>
 
-        {/* MOBILE ONLY: SLIDE-UP BOTTOM SHEET FOR SEARCH CONTROLS */}
+        {/* MOBILE ONLY: SLIDE-DOWN TOP SHEET FOR SEARCH CONTROLS */}
         {isBottomSheetOpen && (
-          <div className="fixed inset-0 z-[110] sm:hidden animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[110] sm:hidden animate-in fade-in duration-200 flex flex-col justify-start">
             {/* Backdrop */}
             <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => {
                 setIsBottomSheetOpen(false);
                 setMobileSheetTab("none");
               }}
             />
 
-            {/* Bottom Sheet Modal */}
-            <div className="absolute inset-x-0 bottom-0 z-[120] max-h-[90vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl animate-in slide-in-from-bottom duration-300">
-              {/* Drag Handle Indicator */}
-              <div className="mx-auto -mt-1 mb-4 h-1.5 w-12 rounded-full bg-neutral-300" />
+            {/* Top Sheet Modal */}
+            <div className="relative z-[120] max-h-[88vh] overflow-y-auto rounded-b-3xl border-b border-neutral-200 bg-white p-5 shadow-2xl animate-in slide-in-from-top duration-300">
 
               {/* Header */}
               <div className="flex items-center justify-between pb-3.5 border-b border-neutral-100">
@@ -870,6 +869,9 @@ export function HotelSearchBanner({
                   Apply &amp; Search
                 </button>
               </div>
+
+              {/* Drag Handle Indicator at bottom for top-down sheet */}
+              <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-neutral-300" />
             </div>
           </div>
         )}
@@ -1249,6 +1251,7 @@ export default function HotelSearchFilter({
   setLocation = () => {},
   hotelId = "",
   setHotelId = () => {},
+  selectedHotelName = "",
   checkIn = "",
   setCheckIn = () => {},
   checkOut = "",
@@ -1284,6 +1287,7 @@ export default function HotelSearchFilter({
         setLocation={setLocation}
         hotelId={hotelId}
         setHotelId={setHotelId}
+        selectedHotelName={selectedHotelName}
         checkIn={checkIn}
         checkOut={checkOut}
         guests={guests}

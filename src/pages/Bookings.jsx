@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   AlertCircle,
@@ -23,8 +23,10 @@ import {
   HelpCircle,
   Info,
   Lock,
+  Mail,
   MapPin,
   Minus,
+  Phone,
   Plus,
   Refrigerator,
   Shield,
@@ -34,9 +36,11 @@ import {
   Sparkles,
   Star,
   Tv,
+  User,
   Users,
   Waves,
   Wifi,
+  X,
 } from "lucide-react";
 
 import {
@@ -181,6 +185,20 @@ function Bookings() {
   const [phoneSaving, setPhoneSaving] = useState(false);
   const [hotelImage, setHotelImage] = useState(null);
 
+  const navigate = useNavigate();
+
+  // Primary Guest Details
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [specialRequests, setSpecialRequests] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const draftStorageKey = useMemo(
+    () => `starlight_booking_draft_${hotelId || "default"}_${categoryId || "default"}`,
+    [hotelId, categoryId]
+  );
+
   useEffect(() => {
     window.scrollTo({
       top: 0,
@@ -189,18 +207,117 @@ function Bookings() {
     });
   }, []);
 
+  // Restore draft from sessionStorage
+  useEffect(() => {
+    try {
+      const savedDraft = sessionStorage.getItem(draftStorageKey);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed.guestName) setGuestName(parsed.guestName);
+        if (parsed.guestEmail) setGuestEmail(parsed.guestEmail);
+        if (parsed.guestPhone) setGuestPhone(parsed.guestPhone);
+        if (parsed.specialRequests) setSpecialRequests(parsed.specialRequests);
+      }
+    } catch (err) {
+      console.error("Error reading booking draft:", err);
+    }
+  }, [draftStorageKey]);
+
+  // Persist draft to sessionStorage
+  useEffect(() => {
+    try {
+      const draft = {
+        guestName,
+        guestEmail,
+        guestPhone,
+        specialRequests,
+      };
+      sessionStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    } catch (err) {
+      console.error("Error saving booking draft:", err);
+    }
+  }, [draftStorageKey, guestName, guestEmail, guestPhone, specialRequests]);
+
+  // Authenticated user detection & profile autofill
+  useEffect(() => {
+    let mounted = true;
+
+    async function initUser() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!mounted) return;
+
+        if (user) {
+          setCurrentUser(user);
+          const { data: profile } = await supabase
+            .from("users")
+            .select("full_name, email, phone")
+            .eq("id", user.id)
+            .single();
+
+          if (mounted) {
+            if (profile) {
+              setGuestName((prev) => prev || profile.full_name || user.user_metadata?.display_name || "");
+              setGuestEmail((prev) => prev || profile.email || user.email || "");
+              setGuestPhone((prev) => prev || profile.phone || user.user_metadata?.phone || "");
+            } else {
+              setGuestEmail((prev) => prev || user.email || "");
+              setGuestName((prev) => prev || user.user_metadata?.display_name || "");
+              setGuestPhone((prev) => prev || user.user_metadata?.phone || "");
+            }
+          }
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.error("User init error:", err);
+      }
+    }
+
+    initUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const { data: profile } = await supabase
+            .from("users")
+            .select("full_name, email, phone")
+            .eq("id", user.id)
+            .single();
+
+          if (mounted) {
+            if (profile) {
+              setGuestName((prev) => prev || profile.full_name || user.user_metadata?.display_name || "");
+              setGuestEmail((prev) => prev || profile.email || user.email || "");
+              setGuestPhone((prev) => prev || profile.phone || user.user_metadata?.phone || "");
+            } else {
+              setGuestEmail((prev) => prev || user.email || "");
+              setGuestName((prev) => prev || user.user_metadata?.display_name || "");
+            }
+          }
+        } catch (e) {
+          console.error("Profile fetch error on auth change:", e);
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
+  }, []);
+
   // --------------------------------------------------
   // LOAD HOTEL + CATEGORY
   // --------------------------------------------------
-  useEffect(() => {
-    if (!bookingConfirmation) return;
-
-    const timer = setTimeout(() => {
-      setBookingConfirmation(null);
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [bookingConfirmation]);
 
   useEffect(() => {
     async function loadDetails() {
@@ -547,26 +664,56 @@ function Bookings() {
       setGuests(newGuests);
     }
   }
-  const handleBookNow = async () => {
+  const handleBookNow = async (verifiedUser = null) => {
     console.log("Book Now clicked");
-
     setBookingError("");
 
+    // Validate guest information before booking
+    if (!guestName.trim()) {
+      setBookingError("Please enter the primary guest full name.");
+      return;
+    }
+
+    if (!guestEmail.trim() || !/\S+@\S+\.\S+/.test(guestEmail.trim())) {
+      setBookingError("Please enter a valid guest email address.");
+      return;
+    }
+
+    const cleanPhone = guestPhone.trim();
+    if (!cleanPhone || !/^\+?[0-9]{10,15}$/.test(cleanPhone)) {
+      setBookingError("Please enter a valid 10-digit mobile number for check-in voucher.");
+      return;
+    }
+
     try {
+      // Must have active valid session token to execute authenticated create_booking RPC
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      console.log("Current user:", user);
-
-      // Not logged in
-      if (!user) {
-        console.log("USER NOT LOGGED IN → OPEN SIGNUP");
-        setAuthMode("signup");
+      if (!session || !session.user) {
+        console.log("NO ACTIVE SESSION → OPEN IN-PLACE AUTH MODAL");
+        setCurrentUser(null);
+        setAuthMode("login");
         return;
       }
 
+      const user = session.user;
+      setCurrentUser(user);
       console.log("USER LOGGED IN:", user.id);
+
+      // Ensure phone and name are synced to users table so backend RPC create_booking doesn't fail
+      try {
+        await supabase
+          .from("users")
+          .update({
+            phone: cleanPhone,
+            full_name: guestName.trim(),
+          })
+          .eq("id", user.id);
+      } catch (syncErr) {
+        console.warn("Could not sync phone/name to user profile:", syncErr);
+      }
 
       // User is authenticated → continue booking
       await completeBooking();
@@ -579,6 +726,7 @@ function Bookings() {
       );
     }
   };
+
   const completeBooking = async () => {
     setBookingLoading(true);
     setBookingError("");
@@ -598,6 +746,13 @@ function Bookings() {
 
       setBookingConfirmation(result);
 
+      // Clear the local draft upon completed reservation
+      try {
+        sessionStorage.removeItem(draftStorageKey);
+      } catch (e) {
+        console.warn(e);
+      }
+
       // Refresh availability after successful booking
       await refreshAvailability();
     } catch (error) {
@@ -605,9 +760,20 @@ function Bookings() {
 
       const message = error?.message || "";
 
+      if (
+        message.includes("permission denied for function create_booking") ||
+        message.includes("JWT") ||
+        message.includes("session")
+      ) {
+        setCurrentUser(null);
+        setBookingError("Please sign in or create an account to complete your reservation.");
+        setAuthMode("login");
+        return;
+      }
+
       if (message.includes("Phone number is required")) {
         setBookingError("");
-        setPhone("");
+        setPhone(guestPhone || "");
         setPhoneModalOpen(true);
         return;
       }
@@ -975,6 +1141,123 @@ function Bookings() {
                   </div>
 
                 </div>
+              </div>
+
+
+              {/* PRIMARY GUEST DETAILS CARD */}
+              <div className="overflow-hidden rounded-3xl border border-neutral-200/80 bg-white p-6 sm:p-8 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-neutral-200/70 pb-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-[#B88428]">
+                        <User size={18} />
+                      </div>
+                      <h2 className="text-lg font-bold text-neutral-900">
+                        Primary Guest Details
+                      </h2>
+                    </div>
+                    <p className="mt-1 text-xs sm:text-sm text-neutral-500">
+                      Booking confirmation voucher and hotel check-in will be issued to these details
+                    </p>
+                  </div>
+
+                  {currentUser ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      <span>Authenticated Account</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50/80 px-3 py-1 text-xs font-semibold text-[#B88428] border border-amber-200/60 shrink-0 self-start sm:self-auto">
+                      <Sparkles size={13} className="text-[#D7A441]" />
+                      <span>Direct Guest Booking</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                  {/* Full Name */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
+                        <User size={16} />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="e.g. Rahul Sharma"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] pl-11 pr-4 py-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
+                        <Mail size={16} />
+                      </div>
+                      <input
+                        type="email"
+                        placeholder="e.g. rahul@example.com"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] pl-11 pr-4 py-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
+                      Mobile Number <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
+                        <Phone size={16} />
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder="e.g. 9876543210"
+                        value={guestPhone}
+                        onChange={(e) => setGuestPhone(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] pl-11 pr-4 py-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Special Requests */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
+                      Special Requests <span className="text-neutral-400 font-normal normal-case">(Optional)</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. Early check-in preference, high floor, non-smoking, celebration arrangement..."
+                      value={specialRequests}
+                      onChange={(e) => setSpecialRequests(e.target.value)}
+                      className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] p-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
+                    />
+                  </div>
+                </div>
+
+                {!currentUser && (
+                  <div className="mt-5 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-3.5 flex items-center gap-3">
+                    <ShieldCheck size={18} className="text-[#D7A441] shrink-0" />
+                    <p className="text-xs text-neutral-500 leading-relaxed">
+                      You are booking as a guest. When you click <strong className="text-neutral-800">Complete Reservation</strong>, you can sign in or create an account right here in 1 click without losing your entered details.
+                    </p>
+                  </div>
+                )}
               </div>
 
 
@@ -1493,8 +1776,27 @@ function Bookings() {
                     </div>
                   </div>
 
+                  {/* GUEST RECOGNITION STATUS */}
+                  {currentUser ? (
+                    <div className="mt-5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 p-3 text-xs text-emerald-900 flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                        <span className="truncate">
+                          Reserving as <strong className="text-neutral-900">{guestName || currentUser.email}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-2xl bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 flex items-start gap-2">
+                      <Sparkles size={15} className="text-[#D7A441] shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                        Guest details are retained securely during sign in / sign up.
+                      </p>
+                    </div>
+                  )}
+
                   {/* ACTION BUTTON */}
-                  <div className="mt-6">
+                  <div className="mt-4">
                     <button
                       type="button"
                       onClick={handleBookNow}
@@ -1566,29 +1868,55 @@ function Bookings() {
       <Footer />
 
       {/* =================================================
-        BOOKING CONFIRMATION MODAL (Celebration Design)
+        BOOKING CONFIRMATION MODAL (Yellow / Pending Design)
       ================================================= */}
       {bookingConfirmation && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-xs px-4 animate-fadeIn">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl border border-neutral-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-7 sm:p-8 text-center shadow-2xl border border-neutral-200">
 
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/50">
-              <CheckCircle2 size={44} className="stroke-[2.5]" />
+            {/* Close 'X' Button */}
+            <button
+              type="button"
+              onClick={() => setBookingConfirmation(null)}
+              className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Yellow / Amber Indicator */}
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-[#B88428] ring-8 ring-amber-100/70 shadow-sm">
+              <Clock size={40} className="stroke-[2.2] text-[#B88428]" />
             </div>
 
-            <h2 className="mt-6 text-2xl font-bold tracking-tight text-neutral-900">
-              Reservation Confirmed!
+            <h2 className="mt-5 text-2xl font-bold tracking-tight text-neutral-900 font-serif">
+              Reservation Request Sent!
             </h2>
 
-            <p className="mt-2 text-xs sm:text-sm text-neutral-500">
-              Your luxury stay at <strong className="text-neutral-800">{hotel.hotel_name}</strong> is officially booked.
+            <p className="mt-2 text-xs sm:text-sm text-neutral-600 leading-relaxed">
+              Your reservation request for <strong className="text-neutral-900">{hotel.hotel_name}</strong> has been submitted. Please wait for confirmation.
             </p>
 
-            <div className="mt-6 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-5 text-left text-xs sm:text-sm space-y-2.5">
+            {/* Yellow Status Info Notice */}
+            <div className="mt-4 rounded-2xl bg-amber-50/90 border border-amber-200/80 p-3.5 text-xs text-amber-950 flex items-start gap-2.5 text-left">
+              <Sparkles size={16} className="text-[#B88428] shrink-0 mt-0.5" />
+              <p className="text-[11px] leading-relaxed">
+                <strong>Pending Confirmation:</strong> To view the real-time status of your booking, please check the <strong>My Bookings</strong> page.
+              </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-5 text-left text-xs sm:text-sm space-y-2.5">
               <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
                 <span className="text-neutral-500 font-medium">Booking Reference</span>
                 <span className="font-mono font-bold text-[#B88428] bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/80">
                   {bookingConfirmation.booking_reference}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
+                <span className="text-neutral-500 font-medium">Booking Status</span>
+                <span className="font-semibold text-[#B88428] bg-amber-50/80 px-2.5 py-0.5 rounded-full border border-amber-200 text-xs">
+                  Pending Confirmation
                 </span>
               </div>
 
@@ -1612,10 +1940,25 @@ function Bookings() {
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-neutral-400">
-              <Clock size={13} />
-              <span>Redirecting automatically in 3 seconds...</span>
-            </div>
+            {/* Action Buttons */}
+            <button
+              type="button"
+              onClick={() => {
+                setBookingConfirmation(null);
+                navigate("/my-bookings");
+              }}
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md hover:shadow-lg cursor-pointer"
+            >
+              Check Status in My Bookings →
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBookingConfirmation(null)}
+              className="mt-2.5 w-full py-2.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 transition-colors cursor-pointer"
+            >
+              Close Window
+            </button>
 
           </div>
         </div>
@@ -1625,11 +1968,35 @@ function Bookings() {
       {authMode && (
         <AuthModal
           mode={authMode}
+          initialEmail={guestEmail}
+          initialPhone={guestPhone}
+          initialName={guestName}
           onClose={() => setAuthMode(null)}
           onSwitch={(mode) => setAuthMode(mode)}
-          onSuccess={() => {
+          onSuccess={async (loggedInUser) => {
             setAuthMode(null);
-            handleBookNow();
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+
+            const activeUser = loggedInUser || session?.user;
+            if (activeUser && session) {
+              setCurrentUser(activeUser);
+              if (guestPhone) {
+                try {
+                  await supabase
+                    .from("users")
+                    .update({
+                      phone: guestPhone.trim(),
+                      full_name: guestName.trim(),
+                    })
+                    .eq("id", activeUser.id);
+                } catch (e) {
+                  console.warn("Phone sync error:", e);
+                }
+              }
+              await completeBooking();
+            }
           }}
         />
       )}

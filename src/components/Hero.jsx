@@ -68,6 +68,7 @@ const DESTINATIONS = [
     subtext: "Kuyavarpalayam, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "b4acb26a-fdf1-465f-bc9d-6d891779d7e3",
   },
   {
     type: "property",
@@ -75,6 +76,7 @@ const DESTINATIONS = [
     subtext: "Kottakuppam, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "f9a3b244-de2a-43bd-bd4a-55a08de6f216",
   },
   {
     type: "property",
@@ -90,6 +92,7 @@ const DESTINATIONS = [
     subtext: "Karuvadikuppam Main Road, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "1799721d-e784-4ac2-8e98-6f1a754c62a4",
   },
   {
     type: "property",
@@ -97,6 +100,7 @@ const DESTINATIONS = [
     subtext: "Auroville, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "43426af8-5967-4389-a18c-5021a7e35cd5",
   },
   {
     type: "property",
@@ -104,6 +108,7 @@ const DESTINATIONS = [
     subtext: "Auroville, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "bee4bb75-2e78-4d53-a4b3-ba5a6a567302",
   },
   {
     type: "property",
@@ -111,6 +116,7 @@ const DESTINATIONS = [
     subtext: "Karuvadikuppam, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "22b30f73-e3eb-4bf7-a914-f0afd17b4def",
   },
   {
     type: "property",
@@ -118,6 +124,7 @@ const DESTINATIONS = [
     subtext: "Kottakuppam, Pondicherry",
     city: "Pondicherry",
     queryValue: "Pondicherry",
+    hotelId: "1e86a6df-a2c7-42ea-a187-3b56d97e75ac",
   },
 
   // ============================================================
@@ -129,6 +136,7 @@ const DESTINATIONS = [
     subtext: "Sivaji Street, T. Nagar, Chennai",
     city: "Chennai",
     queryValue: "Chennai",
+    hotelId: "86d978a6-f9c8-433b-b940-25628f2e8dfb",
   },
   {
     type: "property",
@@ -136,6 +144,7 @@ const DESTINATIONS = [
     subtext: "Ramachandra Street, T. Nagar, Chennai",
     city: "Chennai",
     queryValue: "Chennai",
+    hotelId: "c4947238-84d8-440e-8b17-093ec1bdb543",
   },
   {
     type: "property",
@@ -143,6 +152,7 @@ const DESTINATIONS = [
     subtext: "Manapakkam, Chennai",
     city: "Chennai",
     queryValue: "Chennai",
+    hotelId: "13500953-6932-479a-acbb-dd3056a2cf51",
   },
   {
     type: "property",
@@ -150,6 +160,7 @@ const DESTINATIONS = [
     subtext: "Thoraipakkam, Chennai",
     city: "Chennai",
     queryValue: "Chennai",
+    hotelId: "c82b2c6d-3503-4943-8a2b-ec73cec3bb3a",
   },
   {
     type: "property",
@@ -157,6 +168,7 @@ const DESTINATIONS = [
     subtext: "Mylapore, Chennai",
     city: "Chennai",
     queryValue: "Chennai",
+    hotelId: "7a07fdd9-19d0-44d5-ab95-c59a6abb3c40",
   },
   {
     type: "property",
@@ -164,6 +176,7 @@ const DESTINATIONS = [
     subtext: "T-Nagar, Chennai",
     city: "Chennai",
     queryValue: "Chennai",
+    hotelId: "437c8e6b-8c72-46ce-aca2-bb0a21c41094",
   },
 
   // ============================================================
@@ -251,17 +264,54 @@ export default function Hero({ onSearch }) {
     if (e) e.preventDefault();
     setActiveDropdown(null);
 
+    let finalLocation = selectedLocation;
+    let finalHotelId = selectedHotelId;
+
+    // If user typed a hotel name or destination without explicitly clicking a dropdown item,
+    // match against properties/cities in DESTINATIONS
+    const inputTerm = (displayLocationName || locationSearchTerm || "").trim().toLowerCase();
+    if (inputTerm) {
+      // 1. Try to match a specific hotel property first
+      const matchedProperty = DESTINATIONS.find(
+        (d) => d.type === "property" && d.name.toLowerCase() === inputTerm
+      ) || DESTINATIONS.find(
+        (d) => d.type === "property" && (
+          d.name.toLowerCase().includes(inputTerm) ||
+          inputTerm.includes(d.name.toLowerCase())
+        )
+      );
+
+      if (matchedProperty) {
+        finalHotelId = matchedProperty.hotelId || finalHotelId;
+        finalLocation = matchedProperty.city || matchedProperty.queryValue || finalLocation;
+      } else if (!finalLocation) {
+        // 2. Try to match a city
+        const matchedCity = DESTINATIONS.find(
+          (d) => d.type === "city" && (
+            d.name.toLowerCase() === inputTerm ||
+            d.name.toLowerCase().includes(inputTerm) ||
+            inputTerm.includes(d.name.toLowerCase())
+          )
+        );
+        if (matchedCity) {
+          finalLocation = matchedCity.queryValue;
+        } else {
+          finalLocation = locationSearchTerm.trim();
+        }
+      }
+    }
+
     const params = new URLSearchParams();
-    if (selectedLocation) params.set("location", selectedLocation);
-    if (selectedHotelId) params.set("hotel", selectedHotelId);
+    if (finalLocation) params.set("location", finalLocation);
+    if (finalHotelId) params.set("hotel", finalHotelId);
     if (checkInDate) params.set("checkIn", checkInDate);
     if (checkOutDate) params.set("checkOut", checkOutDate);
     if (totalGuests) params.set("guests", String(totalGuests));
 
     if (onSearch) {
       onSearch({
-        location: selectedLocation,
-        hotel: selectedHotelId,
+        location: finalLocation,
+        hotel: finalHotelId,
         checkIn: checkInDate,
         checkOut: checkOutDate,
         guests: totalGuests,
@@ -306,7 +356,7 @@ export default function Hero({ onSearch }) {
       } else {
         setCheckOutDate(dateStr);
         if (!mobileSearchModalOpen) {
-          setActiveDropdown(null);
+          setActiveDropdown("guests");
         } else {
           setMobileTab("guests");
         }
@@ -579,7 +629,8 @@ export default function Hero({ onSearch }) {
                           setSelectedLocation(dest.queryValue);
                           setSelectedHotelId(dest.hotelId || "");
                           setDisplayLocationName(dest.name);
-                          setActiveDropdown(null);
+                          setCalendarTarget("checkIn");
+                          setActiveDropdown("calendar");
                         }}
                         className="w-full flex items-center gap-3.5 rounded-2xl p-2.5 transition-all text-left hover:bg-white/10 group"
                       >
@@ -732,8 +783,8 @@ export default function Hero({ onSearch }) {
                   </div>
                 </div>
 
-                {/* Footer Clear Action */}
-                <div className="mt-4 sm:mt-5 pt-3 border-t border-white/10 flex justify-end">
+                {/* Footer Clear & Next Actions */}
+                <div className="mt-4 sm:mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
                   <button
                     type="button"
                     onClick={() => {
@@ -741,10 +792,26 @@ export default function Hero({ onSearch }) {
                       setCheckOutDate("");
                       setCalendarTarget("checkIn");
                     }}
-                    className="text-xs font-semibold text-[#D7A441] hover:underline"
+                    className="text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
                   >
                     Clear dates
                   </button>
+                  {checkInDate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!checkOutDate) {
+                          setCalendarTarget("checkOut");
+                        } else {
+                          setActiveDropdown("guests");
+                        }
+                      }}
+                      className="text-xs font-semibold text-[#D7A441] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>{checkOutDate ? "Next: Guests" : "Select Check-out"}</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  )}
                 </div>
 
               </div>
@@ -907,17 +974,15 @@ export default function Hero({ onSearch }) {
           MOBILE SEARCH BOTTOM SHEET MODAL (MATCHING IMAGE 2)
       ===================================================== */}
       {mobileSearchModalOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center bg-black/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex flex-col justify-start items-center bg-black/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200 overflow-y-auto">
           {/* Backdrop click to close */}
           <div
-            className="absolute inset-0"
+            className="fixed inset-0"
             onClick={() => setMobileSearchModalOpen(false)}
           />
 
-          {/* Bottom Sheet Card */}
-          <div className="relative z-10 w-full max-w-lg rounded-t-[28px] sm:rounded-3xl border border-white/15 bg-[#0D0E12] p-4 sm:p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.9)] max-h-[90vh] flex flex-col">
-            {/* Drag Handle Bar for mobile sheet look */}
-            <div className="w-12 h-1 rounded-full bg-white/20 mx-auto mb-3 sm:hidden" />
+          {/* Top-down Overlay Card */}
+          <div className="relative z-10 w-full max-w-lg rounded-b-[28px] sm:rounded-3xl border-b border-x sm:border border-white/15 bg-[#0D0E12] p-4 sm:p-6 shadow-[0_20px_50px_rgba(0,0,0,0.95)] max-h-[90vh] flex flex-col animate-in slide-in-from-top duration-300">
 
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
@@ -1223,6 +1288,9 @@ export default function Hero({ onSearch }) {
                 <span>Search Stays</span>
               </button>
             </div>
+
+            {/* Bottom Handle Indicator for top-down sheet */}
+            <div className="w-12 h-1 rounded-full bg-white/20 mx-auto mt-2.5 sm:hidden" />
           </div>
         </div>
       )}

@@ -10,6 +10,7 @@ import {
   MapPin,
   Sparkles,
   Star,
+  X,
 } from "lucide-react";
 
 import {
@@ -489,9 +490,9 @@ function Availability() {
 
   const filteredHotels = useMemo(() => {
     const filtered = hotels.filter((hotel) => {
-      // Specific hotel from URL
-      if (hotelId && hotel.id !== hotelId) {
-        return false;
+      // Specific hotel from URL or selection
+      if (hotelId) {
+        return hotel.id === hotelId;
       }
 
       // Location (matches city, hotel name, or address)
@@ -575,6 +576,11 @@ function Availability() {
     pricingByCategory,
   ]);
 
+  const selectedHotel = useMemo(() => {
+    if (!hotelId) return null;
+    return hotels.find((h) => h.id === hotelId);
+  }, [hotels, hotelId]);
+
   // --------------------------------------------------
   // CLEAR FILTERS
   // --------------------------------------------------
@@ -589,7 +595,7 @@ function Availability() {
   }
 
   const activeFilterCount =
-    (location ? 1 : 0) +
+    (location || hotelId ? 1 : 0) +
     (minPrice > 0 || maxPrice < 20000 ? 1 : 0) +
     (guests !== "2" ? 1 : 0);
 
@@ -633,6 +639,7 @@ function Availability() {
           setLocation={setLocation}
           hotelId={hotelId}
           setHotelId={setHotelId}
+          selectedHotelName={selectedHotel?.hotel_name}
           checkIn={checkIn}
           setCheckIn={setCheckIn}
           checkOut={checkOut}
@@ -658,9 +665,24 @@ function Availability() {
                   <h2 className="text-xl font-bold tracking-tight text-neutral-900 font-sans">
                     Available Stays
                   </h2>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    Showing <span className="font-bold text-[#B88428]">{filteredHotels.length}</span> luxury {filteredHotels.length === 1 ? "property" : "properties"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <p className="text-xs text-neutral-500">
+                      Showing <span className="font-bold text-[#B88428]">{filteredHotels.length}</span> luxury {filteredHotels.length === 1 ? "property" : "properties"}
+                    </p>
+                    {selectedHotel && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#D7A441]/15 border border-[#D7A441]/30 px-2.5 py-0.5 text-[11px] font-semibold text-[#8B651B]">
+                        <span>Hotel: {selectedHotel.hotel_name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setHotelId("")}
+                          className="hover:text-black transition cursor-pointer p-0.5"
+                          title="Show all hotels"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* CUSTOM LUXURY SORT DROPDOWN */}

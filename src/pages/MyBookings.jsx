@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   Hotel,
@@ -7,17 +6,8 @@ import {
   Eye,
   X,
   MapPin,
-  ArrowLeft,
-  ChevronRight,
-  Clock,
-  Sparkles,
-  ExternalLink,
-  AlertCircle,
-  ShieldCheck,
-  AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import Footer from "../components/Footer";
 
 export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
@@ -29,8 +19,6 @@ export default function MyBookings() {
     useState(null);
   const [cancellingBookingId, setCancellingBookingId] =
     useState(null);
-
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadBookings();
@@ -215,13 +203,13 @@ export default function MyBookings() {
     status?.toLowerCase()
     ) {
       case "confirmed":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200/90";
+        return "bg-green-50 text-green-700 border-green-200";
 
       case "cancelled":
-        return "bg-rose-50 text-rose-700 border-rose-200/90";
+        return "bg-red-50 text-red-700 border-red-200";
 
       default:
-        return "bg-amber-50 text-amber-700 border-amber-200/90";
+        return "bg-yellow-50 text-yellow-700 border-yellow-200";
     }
   };
 
@@ -297,429 +285,335 @@ export default function MyBookings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between">
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-20">
-          <div className="mx-auto max-w-5xl">
-            {/* Breadcrumb skeleton */}
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-16 animate-pulse rounded bg-neutral-200" />
-              <div className="h-3 w-3 animate-pulse rounded bg-neutral-200" />
-              <div className="h-4 w-28 animate-pulse rounded bg-neutral-200" />
-            </div>
-
-            {/* Header skeleton */}
-            <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-2">
-                <div className="h-8 w-56 animate-pulse rounded-xl bg-neutral-200" />
-                <div className="h-4 w-80 max-w-full animate-pulse rounded-lg bg-neutral-200" />
-              </div>
-              <div className="h-10 w-24 animate-pulse rounded-xl bg-neutral-200" />
-            </div>
-
-            {/* Bookings cards skeleton */}
-            <div className="mt-8 space-y-6">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-3xl border border-neutral-200/80 bg-white p-6 sm:p-8 shadow-xs"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-100 pb-6">
-                    <div className="space-y-2">
-                      <div className="h-6 w-48 animate-pulse rounded-lg bg-neutral-200" />
-                      <div className="h-4 w-32 animate-pulse rounded-lg bg-neutral-200" />
-                    </div>
-                    <div className="h-8 w-36 animate-pulse rounded-full bg-neutral-200" />
-                  </div>
-                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[1, 2, 3, 4].map((n) => (
-                      <div
-                        key={n}
-                        className="h-24 rounded-2xl animate-pulse bg-neutral-100"
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+      <main className="min-h-screen bg-white px-6 py-12">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-2xl border border-gray-200 p-8">
+            <p className="text-base text-gray-500">
+              Loading your bookings...
+            </p>
           </div>
-        </main>
-        <Footer />
-      </div>
+        </div>
+      </main>
     );
   }
 
-  const confirmedCount = bookings.filter(
-    (b) => b.status?.toLowerCase() === "confirmed"
-  ).length;
-
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between text-neutral-900 selection:bg-neutral-200 selection:text-neutral-900">
-      <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-20">
-        <div className="mx-auto max-w-5xl">
-          {/* Top Row: Back Button & Breadcrumbs */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.history.length > 1) {
-                    navigate(-1);
-                  } else {
-                    navigate("/profile");
-                  }
-                }}
-                aria-label="Go back"
-                title="Go back"
-                className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-neutral-200/90 bg-white text-neutral-700 shadow-xs hover:border-[#D7A441] hover:text-[#B88428] hover:shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
-              >
-                <ArrowLeft size={17} className="transition-transform hover:-translate-x-0.5" />
-              </button>
+    <main className="min-h-screen bg-white px-6 py-12 text-gray-900">
+      <div className="mx-auto max-w-5xl">
 
-              <nav className="flex items-center gap-2 text-xs text-neutral-500 font-medium min-w-0">
-                <Link to="/" className="hover:text-neutral-900 transition-colors shrink-0">
-                  Home
-                </Link>
-                <ChevronRight size={13} className="text-neutral-400 shrink-0" />
-                <Link to="/profile" className="hover:text-neutral-900 transition-colors shrink-0">
-                  Account
-                </Link>
-                <ChevronRight size={13} className="text-neutral-400 shrink-0" />
-                <span className="text-neutral-900 font-semibold truncate">My Bookings</span>
-              </nav>
-            </div>
+        {/* HEADER */}
+        <div className="mb-8">
+          <p className="text-base font-medium text-gray-500">
+            Account
+          </p>
+
+          <h1 className="mt-2 text-3xl font-semibold">
+            My Bookings
+          </h1>
+
+          <p className="mt-2 text-base text-gray-500">
+            View and manage your hotel bookings.
+          </p>
+        </div>
+
+        {/* ERROR */}
+        {error && (
+          <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4 text-base text-gray-600">
+            {error}
           </div>
+        )}
 
-          {/* Page Header */}
-          <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                Reservations & Stays
-              </p>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-neutral-900">
-                My Bookings
-              </h1>
-              <p className="mt-1.5 text-sm text-neutral-600">
-                View, manage, and track your confirmed reservations, room vouchers, and stay details.
-              </p>
-            </div>
+        {/* EMPTY */}
+        {!error &&
+          bookings.length === 0 && (
+            <div className="rounded-2xl border border-gray-200 p-12 text-center">
 
-            {bookings.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-100 px-3 py-1.5 text-xs font-semibold text-neutral-700">
-                  Total Bookings: {bookings.length}
-                </span>
-                {confirmedCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200/80 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    {confirmedCount} Confirmed
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+              <Hotel
+                size={44}
+                className="mx-auto text-gray-400"
+              />
 
-          {/* ERROR NOTIFICATION */}
-          {error && (
-            <div className="mt-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 transition-all">
-              <AlertCircle size={18} className="text-rose-600 mt-0.5 shrink-0" />
-              <div className="flex-1 font-medium">{error}</div>
-              <button
-                type="button"
-                onClick={() => setError("")}
-                className="text-neutral-400 hover:text-neutral-600 ml-auto"
-                aria-label="Dismiss error"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          )}
-
-          {/* EMPTY STATE */}
-          {!error && bookings.length === 0 && (
-            <div className="mt-8 rounded-3xl border border-neutral-200/90 bg-white p-10 sm:p-14 text-center shadow-xs">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-600">
-                <Hotel size={32} />
-              </div>
-
-              <h2 className="mt-5 text-xl font-semibold text-neutral-900">
-                No reservations found
+              <h2 className="mt-4 text-xl font-semibold">
+                No bookings yet
               </h2>
 
-              <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500 leading-relaxed">
-                You haven't made any hotel reservations yet. Browse our handpicked collection of luxury suites, villas, and destinations.
+              <p className="mt-2 text-base text-gray-500">
+                Your hotel bookings will appear here.
               </p>
 
-              <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-                <Link
-                  to="/book-hotels"
-                  className="inline-flex items-center gap-2 rounded-xl bg-neutral-900 px-6 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-black active:scale-[0.99]"
-                >
-                  <Sparkles size={16} />
-                  <span>Browse Luxury Hotels</span>
-                </Link>
-                <Link
-                  to="/"
-                  className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50 active:scale-[0.99]"
-                >
-                  Return to Home
-                </Link>
-              </div>
+              <button
+                onClick={() =>
+                (window.location.href =
+                  "/book-hotels")
+                }
+                className="mt-6 rounded-xl bg-black px-6 py-3 text-base font-semibold text-white"
+              >
+                Browse Hotels
+              </button>
             </div>
           )}
 
-          {/* BOOKINGS LIST */}
-          <div className="mt-8 space-y-6">
-            {bookings.map((booking) => {
-              const details = getDetails(booking);
-              const nights = getNights(
+        {/* BOOKINGS */}
+        <div className="space-y-6">
+
+          {bookings.map((booking) => {
+            const details =
+              getDetails(booking);
+
+            const nights =
+              getNights(
                 booking.check_in_date,
                 booking.check_out_date
               );
 
-              return (
-                <div
-                  key={booking.id}
-                  className="group rounded-3xl border border-neutral-200/90 bg-white p-6 sm:p-8 shadow-xs transition hover:shadow-sm"
-                >
-                  {/* TOP ROW: HOTEL INFO & REFERENCE */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-100 pb-6">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h2 className="text-xl font-semibold tracking-tight text-neutral-900">
-                          {details.hotelName}
-                        </h2>
+            return (
+              <div
+                key={booking.id}
+                className="rounded-2xl border border-gray-200 bg-white p-7"
+              >
 
-                        <span
-                          className={`rounded-full border px-3 py-0.5 text-xs font-semibold capitalize ${getStatusClass(
-                            booking.status
-                          )}`}
-                        >
-                          {booking.status}
-                        </span>
-                      </div>
+                {/* TOP */}
+                <div className="flex flex-col justify-between gap-5 sm:flex-row">
 
-                      {details.city && (
-                        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-500">
-                          <MapPin size={14} className="text-neutral-400 shrink-0" />
-                          <span>{details.city}</span>
-                          {details.address && (
-                            <>
-                              <span className="text-neutral-300">•</span>
-                              <span className="text-neutral-400 truncate max-w-md">
-                                {details.address}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      )}
-                    </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-3">
 
-                    <div className="flex sm:flex-col sm:items-end justify-between items-center">
-                      <span className="text-[11px] uppercase tracking-wider font-semibold text-neutral-400">
-                        Booking ID
-                      </span>
-                      <span className="mt-0.5 font-mono text-xs sm:text-sm font-semibold text-neutral-900 bg-neutral-100/90 border border-neutral-200/70 px-2.5 py-1 rounded-lg">
-                        {booking.booking_reference}
-                      </span>
-                    </div>
-                  </div>
+                      <h2 className="text-xl font-semibold">
+                        {details.hotelName}
+                      </h2>
 
-                  {/* INFORMATION GRID (Symmetrical 4-Tile Row) */}
-                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* STAY DATES */}
-                    <div className="flex flex-col justify-between rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4 transition hover:bg-neutral-50">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                            Stay Dates
-                          </span>
-                          <CalendarDays size={16} className="text-neutral-400" />
-                        </div>
-
-                        <div className="mt-3 space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-neutral-400">In:</span>
-                            <span className="font-semibold text-neutral-900">
-                              {formatDate(booking.check_in_date)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-neutral-400">Out:</span>
-                            <span className="font-semibold text-neutral-900">
-                              {formatDate(booking.check_out_date)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-neutral-200/60 flex items-center justify-between">
-                        <span className="text-[11px] font-medium text-neutral-500">
-                          Duration
-                        </span>
-                        <span className="text-xs font-semibold text-neutral-800">
-                          {nights} {nights === 1 ? "night" : "nights"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* ROOM CATEGORY */}
-                    <div className="flex flex-col justify-between rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4 transition hover:bg-neutral-50">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                            Accommodation
-                          </span>
-                          <Hotel size={16} className="text-neutral-400" />
-                        </div>
-
-                        <p className="mt-3 text-sm font-semibold text-neutral-900 truncate" title={details.categoryName}>
-                          {details.categoryName}
-                        </p>
-
-                        <p className="mt-1 text-xs text-neutral-500">
-                          {details.roomCount} {details.roomCount === 1 ? "room" : "rooms"}
-                          {details.roomNumbers.length > 0 && (
-                            <span className="ml-1 text-neutral-400">
-                              (Room {details.roomNumbers.join(", ")})
-                            </span>
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-neutral-200/60">
-                        <span className="text-[11px] text-neutral-400">
-                          Starlight Verified Suite
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* GUESTS */}
-                    <div className="flex flex-col justify-between rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4 transition hover:bg-neutral-50">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                            Guests
-                          </span>
-                          <Users size={16} className="text-neutral-400" />
-                        </div>
-
-                        <p className="mt-3 text-sm font-semibold text-neutral-900">
-                          {booking.number_of_guests}{" "}
-                          {booking.number_of_guests === 1 ? "Guest" : "Guests"}
-                        </p>
-
-                        {booking.guest_name && (
-                          <p className="mt-1 text-xs text-neutral-500 truncate" title={booking.guest_name}>
-                            {booking.guest_name}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-neutral-200/60">
-                        <span className="text-[11px] text-neutral-400">
-                          Primary guest reservation
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* TOTAL AMOUNT */}
-                    <div className="flex flex-col justify-between rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4 transition hover:bg-neutral-50">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                            Total Paid
-                          </span>
-                          <ShieldCheck size={16} className="text-emerald-600" />
-                        </div>
-
-                        <p className="mt-2 text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900">
-                          ₹{details.totalAmount.toLocaleString("en-IN")}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-neutral-200/60 flex items-center justify-between">
-                        <span className="text-[11px] text-neutral-400">
-                          All taxes & fees incl.
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CARD ACTIONS FOOTER */}
-                  <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-neutral-100 pt-5">
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-                      <Clock size={13} />
-                      <span>Booked on {formatBookedDate(booking.created_at)}</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      {details.placeId && (
-                        <button
-                          type="button"
-                          onClick={() => openGoogleMaps(booking)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-medium text-neutral-800 transition hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.99]"
-                        >
-                          <MapPin size={14} className="text-neutral-500" />
-                          <span>View Location</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBooking(booking)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-medium text-neutral-800 transition hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.99]"
+                      <span
+                        className={`rounded-full border px-3 py-1 text-sm font-medium ${getStatusClass(
+                          booking.status
+                        )}`}
                       >
-                        <Eye size={14} className="text-neutral-500" />
-                        <span>View Details</span>
-                      </button>
+                        {booking.status}
+                      </span>
 
-                      {booking.status?.toLowerCase() === "pending" && (
-                        <button
-                          type="button"
-                          onClick={() => setCancelConfirmBooking(booking)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-100 hover:border-rose-300 active:scale-[0.99]"
-                        >
-                          <span>Cancel Booking</span>
-                        </button>
-                      )}
                     </div>
+
+                    {details.city && (
+                      <p className="mt-2 flex items-center gap-2 text-base text-gray-500">
+                        <MapPin size={18} />
+                        {details.city}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-left sm:text-right">
+                    <p className="text-sm text-gray-400">
+                      Booking Reference
+                    </p>
+
+                    <p className="mt-1 text-base font-semibold">
+                      {
+                        booking.booking_reference
+                      }
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* INFORMATION */}
+                <div className="mt-7 grid gap-7 border-t border-gray-100 pt-7 sm:grid-cols-2 lg:grid-cols-4">
+
+                  {/* STAY */}
+                  <div className="flex gap-3">
+                    <CalendarDays
+                      size={21}
+                      className="mt-1 text-gray-500"
+                    />
+
+                    <div>
+                      <p className="text-sm text-gray-400">
+                        Stay
+                      </p>
+
+                      <div className="mt-2">
+                        <p className="text-sm text-gray-400">
+                          Check-in
+                        </p>
+
+                        <p className="text-base font-semibold">
+                          {formatDate(
+                            booking.check_in_date
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="mt-2">
+                        <p className="text-sm text-gray-400">
+                          Check-out
+                        </p>
+
+                        <p className="text-base font-semibold">
+                          {formatDate(
+                            booking.check_out_date
+                          )}
+                        </p>
+                      </div>
+
+                      <p className="mt-2 text-sm text-gray-500">
+                        {nights}{" "}
+                        {nights === 1
+                          ? "night"
+                          : "nights"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ROOM */}
+                  <div className="flex gap-3">
+                    <Hotel
+                      size={21}
+                      className="mt-1 text-gray-500"
+                    />
+
+                    <div>
+                      <p className="text-sm text-gray-400">
+                        Room
+                      </p>
+
+                      <p className="mt-2 text-base font-semibold">
+                        {
+                          details.categoryName
+                        }
+                      </p>
+
+                      <p className="mt-1 text-sm text-gray-500">
+                        {details.roomCount}{" "}
+                        {details.roomCount ===
+                          1
+                          ? "room"
+                          : "rooms"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* GUESTS */}
+                  <div className="flex gap-3">
+                    <Users
+                      size={21}
+                      className="mt-1 text-gray-500"
+                    />
+
+                    <div>
+                      <p className="text-sm text-gray-400">
+                        Guests
+                      </p>
+
+                      <p className="mt-2 text-base font-semibold">
+                        {
+                          booking.number_of_guests
+                        }{" "}
+                        {booking.number_of_guests ===
+                          1
+                          ? "Guest"
+                          : "Guests"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* TOTAL */}
+                  <div>
+                    <p className="text-sm text-gray-400">
+                      Total Amount
+                    </p>
+
+                    <p className="mt-2 text-xl font-semibold">
+                      ₹
+                      {details.totalAmount.toLocaleString(
+                        "en-IN"
+                      )}
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* ACTIONS */}
+                <div className="mt-7 flex flex-col justify-between gap-5 border-t border-gray-100 pt-6 sm:flex-row sm:items-center">
+
+                  <p className="text-sm text-gray-400">
+                    Booked on{" "}
+                    {formatBookedDate(
+                      booking.created_at
+                    )}
+                  </p>
+
+                  <div className="flex flex-wrap gap-3">
+
+                    {details.placeId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openGoogleMaps(
+                            booking
+                          )
+                        }
+                        className="flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-3 text-base font-medium hover:bg-gray-50"
+                      >
+                        <MapPin size={18} />
+                        View Location
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedBooking(
+                          booking
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-3 text-base font-medium hover:bg-gray-50"
+                    >
+                      <Eye size={18} />
+                      View Details
+                    </button>
+
+                    {booking.status?.toLowerCase() ===
+                      "pending" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCancelConfirmBooking(
+                              booking
+                            )
+                          }
+                          className="rounded-xl border border-red-200 px-5 py-3 text-base font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Cancel Booking
+                        </button>
+                      )}
+
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </main>
+      </div>
 
       {/* ==================================================
-           DETAILS POPUP MODAL
-         ================================================== */}
+           DETAILS POPUP
+           ================================================== */}
       {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs px-4 py-6 overflow-y-auto">
-          <div className="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-neutral-200/90 overflow-hidden my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+
             {/* HEADER */}
-            <div className="flex items-start justify-between border-b border-neutral-100 px-6 sm:px-8 py-5 sm:py-6">
+            <div className="flex items-start justify-between border-b border-gray-100 px-7 py-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-                  Reservation Voucher
+                <p className="text-sm text-gray-400">
+                  Booking Details
                 </p>
 
-                <h2 className="mt-1 text-xl sm:text-2xl font-semibold text-neutral-900">
+                <h2 className="mt-1 text-2xl font-semibold text-gray-900">
                   {getDetails(selectedBooking).hotelName}
                 </h2>
 
                 {getDetails(selectedBooking).city && (
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
-                    <MapPin size={13} className="text-neutral-400" />
-                    <span>{getDetails(selectedBooking).city}</span>
-                    {getDetails(selectedBooking).address && (
-                      <>
-                        <span className="text-neutral-300">•</span>
-                        <span className="text-neutral-400 truncate max-w-xs">
-                          {getDetails(selectedBooking).address}
-                        </span>
-                      </>
-                    )}
+                  <p className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+                    <MapPin size={16} />
+                    {getDetails(selectedBooking).city}
                   </p>
                 )}
               </div>
@@ -727,35 +621,37 @@ export default function MyBookings() {
               <button
                 type="button"
                 onClick={() => setSelectedBooking(null)}
-                className="rounded-full p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition"
-                aria-label="Close dialog"
+                className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
               >
-                <X size={20} />
+                <X size={21} />
               </button>
             </div>
 
             {(() => {
               const details = getDetails(selectedBooking);
+
               const nights = getNights(
                 selectedBooking.check_in_date,
                 selectedBooking.check_out_date
               );
 
               return (
-                <div className="px-6 sm:px-8 py-6 max-h-[75vh] overflow-y-auto">
+                <div className="px-7 py-6">
+
                   {/* BOOKING REFERENCE + STATUS */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/70 p-4">
+                  <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                      <p className="text-xs text-gray-400">
                         Booking Reference
                       </p>
-                      <p className="mt-0.5 font-mono text-base font-semibold text-neutral-900">
+
+                      <p className="mt-1 text-base font-semibold">
                         {selectedBooking.booking_reference}
                       </p>
                     </div>
 
                     <span
-                      className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(
+                      className={`w-fit rounded-full border px-3 py-1 text-sm font-medium ${getStatusClass(
                         selectedBooking.status
                       )}`}
                     >
@@ -763,192 +659,207 @@ export default function MyBookings() {
                     </span>
                   </div>
 
-                  {/* STAY DATES (2-Col) */}
-                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="rounded-2xl border border-neutral-200/80 bg-white p-4">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                  {/* STAY */}
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+
+                    <div className="rounded-xl border border-gray-200 p-5">
+                      <p className="text-xs text-gray-400">
                         Check-in
-                      </span>
-                      <p className="mt-1.5 text-base font-semibold text-neutral-900">
-                        {formatDate(selectedBooking.check_in_date)}
                       </p>
-                      <p className="mt-0.5 text-xs text-neutral-500">
-                        From 12:00 PM onwards
+
+                      <p className="mt-2 text-lg font-semibold">
+                        {formatDate(
+                          selectedBooking.check_in_date
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-sm text-gray-500">
+                        12:00 PM
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-neutral-200/80 bg-white p-4">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                    <div className="rounded-xl border border-gray-200 p-5">
+                      <p className="text-xs text-gray-400">
                         Check-out
-                      </span>
-                      <p className="mt-1.5 text-base font-semibold text-neutral-900">
-                        {formatDate(selectedBooking.check_out_date)}
                       </p>
-                      <p className="mt-0.5 text-xs text-neutral-500">
-                        Until 11:00 AM
+
+                      <p className="mt-2 text-lg font-semibold">
+                        {formatDate(
+                          selectedBooking.check_out_date
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-sm text-gray-500">
+                        11:00 AM
                       </p>
                     </div>
+
                   </div>
 
-                  {/* BOOKING INFORMATION (3-Col) */}
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-                        Category
+                  {/* BOOKING INFORMATION */}
+                  <div className="mt-5 grid gap-4 sm:grid-cols-3">
+
+                    <div className="rounded-xl border border-gray-200 p-4">
+                      <p className="text-xs text-gray-400">
+                        Room Category
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900 truncate">
+
+                      <p className="mt-1 font-semibold">
                         {details.categoryName}
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                    <div className="rounded-xl border border-gray-200 p-4">
+                      <p className="text-xs text-gray-400">
                         Rooms
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">
-                        {details.roomCount} {details.roomCount === 1 ? "Room" : "Rooms"}
+
+                      <p className="mt-1 font-semibold">
+                        {details.roomCount}
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                    <div className="rounded-xl border border-gray-200 p-4">
+                      <p className="text-xs text-gray-400">
                         Guests
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">
-                        {selectedBooking.number_of_guests} {selectedBooking.number_of_guests === 1 ? "Guest" : "Guests"}
+
+                      <p className="mt-1 font-semibold">
+                        {selectedBooking.number_of_guests}
                       </p>
                     </div>
+
                   </div>
 
-                  {/* GUEST CONTACT DETAILS (if available) */}
-                  {(selectedBooking.guest_name || selectedBooking.guest_email || selectedBooking.guest_phone) && (
-                    <div className="mt-4 rounded-2xl border border-neutral-200/80 bg-white p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-                        Guest Contact Details
-                      </p>
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                        {selectedBooking.guest_name && (
-                          <div>
-                            <span className="text-neutral-400">Name: </span>
-                            <span className="font-medium text-neutral-800">{selectedBooking.guest_name}</span>
-                          </div>
-                        )}
-                        {selectedBooking.guest_email && (
-                          <div>
-                            <span className="text-neutral-400">Email: </span>
-                            <span className="font-medium text-neutral-800">{selectedBooking.guest_email}</span>
-                          </div>
-                        )}
-                        {selectedBooking.guest_phone && (
-                          <div>
-                            <span className="text-neutral-400">Phone: </span>
-                            <span className="font-medium text-neutral-800">{selectedBooking.guest_phone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SUMMARY DURATION & PRICE */}
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-neutral-200/80 bg-neutral-900 p-5 text-white">
+                  {/* SUMMARY */}
+                  <div className="mt-5 flex items-center justify-between rounded-xl border border-gray-200 p-5">
                     <div>
-                      <p className="text-xs text-neutral-300">
-                        Duration of Stay
+                      <p className="text-xs text-gray-400">
+                        Stay Duration
                       </p>
-                      <p className="mt-0.5 text-base font-semibold text-white">
-                        {nights} {nights === 1 ? "night" : "nights"}
+
+                      <p className="mt-1 font-semibold">
+                        {nights}{" "}
+                        {nights === 1 ? "night" : "nights"}
                       </p>
                     </div>
 
                     <div className="text-right">
-                      <p className="text-xs text-neutral-300">
-                        Total Amount Paid
+                      <p className="text-xs text-gray-400">
+                        Total Amount
                       </p>
-                      <p className="mt-0.5 text-xl sm:text-2xl font-bold text-white">
-                        ₹{details.totalAmount.toLocaleString("en-IN")}
+
+                      <p className="mt-1 text-xl font-semibold">
+                        ₹
+                        {details.totalAmount.toLocaleString(
+                          "en-IN"
+                        )}
                       </p>
                     </div>
                   </div>
 
-                  {/* LOCATION BUTTON */}
+                  {/* LOCATION */}
                   {details.placeId && (
                     <button
                       type="button"
-                      onClick={() => openGoogleMaps(selectedBooking)}
-                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-medium text-neutral-800 shadow-xs transition hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.99]"
+                      onClick={() =>
+                        openGoogleMaps(selectedBooking)
+                      }
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium hover:bg-gray-50"
                     >
-                      <MapPin size={16} className="text-neutral-600" />
-                      <span>Open Location in Google Maps</span>
-                      <ExternalLink size={14} className="text-neutral-400 ml-1" />
+                      <MapPin size={18} />
+                      View Location on Google Maps
                     </button>
                   )}
 
-                  {/* CANCEL BUTTON */}
-                  {selectedBooking.status?.toLowerCase() === "pending" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedBooking(null);
-                        setCancelConfirmBooking(selectedBooking);
-                      }}
-                      className="mt-3 w-full rounded-xl border border-rose-200 bg-rose-50/70 px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-100 active:scale-[0.99]"
-                    >
-                      Cancel Reservation
-                    </button>
-                  )}
+                  {/* CANCEL */}
+                  {selectedBooking.status?.toLowerCase() ===
+                    "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBooking(null);
+                          setCancelConfirmBooking(
+                            selectedBooking
+                          );
+                        }}
+                        className="mt-3 w-full rounded-xl border border-red-200 px-5 py-3 text-sm font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Cancel Booking
+                      </button>
+                    )}
+
                 </div>
               );
             })()}
+
           </div>
         </div>
       )}
-
       {/* ==================================================
-           CANCEL CONFIRMATION MODAL
-         ================================================== */}
+          CANCEL CONFIRMATION
+      ================================================== */}
       {cancelConfirmBooking && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-xs px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-7 sm:p-8 shadow-2xl border border-neutral-200/90">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-              <AlertTriangle size={24} />
-            </div>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
 
-            <h2 className="mt-4 text-xl font-semibold text-neutral-900">
-              Cancel Reservation?
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+
+            <h2 className="text-xl font-semibold">
+              Cancel Booking?
             </h2>
 
-            <p className="mt-2 text-sm text-neutral-600 leading-relaxed">
-              Are you sure you want to cancel booking reference{" "}
-              <strong className="font-semibold text-neutral-900 font-mono">
-                {cancelConfirmBooking.booking_reference}
+            <p className="mt-3 text-base text-gray-500">
+              Are you sure you want to cancel booking{" "}
+              <strong className="text-gray-700">
+                {
+                  cancelConfirmBooking.booking_reference
+                }
               </strong>
-              ? Once cancelled, this reservation cannot be reactivated.
+              ?
             </p>
 
-            <div className="mt-7 flex flex-wrap items-center justify-end gap-3">
+            <div className="mt-7 flex justify-end gap-3">
+
               <button
                 type="button"
-                onClick={() => setCancelConfirmBooking(null)}
-                disabled={Boolean(cancellingBookingId)}
-                className="rounded-xl border border-neutral-300 bg-white px-5 py-2.5 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50 active:scale-[0.99] disabled:opacity-50"
+                onClick={() =>
+                  setCancelConfirmBooking(
+                    null
+                  )
+                }
+                disabled={
+                  Boolean(
+                    cancellingBookingId
+                  )
+                }
+                className="rounded-xl border border-gray-300 px-5 py-3 text-base font-medium hover:bg-gray-50"
               >
                 Keep Booking
               </button>
 
               <button
                 type="button"
-                onClick={() => handleCancelBooking(cancelConfirmBooking)}
-                disabled={Boolean(cancellingBookingId)}
-                className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-rose-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-rose-300"
+                onClick={() =>
+                  handleCancelBooking(
+                    cancelConfirmBooking
+                  )
+                }
+                disabled={
+                  Boolean(
+                    cancellingBookingId
+                  )
+                }
+                className="rounded-xl bg-red-600 px-5 py-3 text-base font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
               >
-                {cancellingBookingId ? "Cancelling..." : "Yes, Cancel Booking"}
+                {cancellingBookingId
+                  ? "Cancelling..."
+                  : "Yes, Cancel"}
               </button>
+
             </div>
           </div>
         </div>
       )}
-
-      <Footer />
-    </div>
+    </main>
   );
 }

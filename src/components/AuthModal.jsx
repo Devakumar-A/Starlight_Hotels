@@ -6,12 +6,27 @@ export default function AuthModal({
   onClose,
   onSwitch,
   onSuccess,
+  initialEmail = "",
+  initialPhone = "",
+  initialName = "",
 }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState(() => {
+    if (initialName) {
+      const parts = initialName.trim().split(" ");
+      return parts[0] || "";
+    }
+    return "";
+  });
+  const [lastName, setLastName] = useState(() => {
+    if (initialName) {
+      const parts = initialName.trim().split(" ");
+      return parts.slice(1).join(" ") || "";
+    }
+    return "";
+  });
+  const [email, setEmail] = useState(initialEmail || "");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(initialPhone || "");
   const [location, setLocation] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
 
@@ -40,7 +55,7 @@ export default function AuthModal({
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: window.location.href,
       },
     });
 
@@ -65,10 +80,11 @@ export default function AuthModal({
         const displayName =
           `${firstName.trim()} ${lastName.trim()}`.trim();
 
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
+            emailRedirectTo: window.location.href,
             data: {
               display_name: displayName,
               phone: phone || null,
@@ -79,6 +95,16 @@ export default function AuthModal({
         });
 
         if (error) throw error;
+
+        // If auto-confirm is enabled or session is returned immediately
+        if (data?.session?.user) {
+          if (onSuccess) {
+            onSuccess(data.session.user);
+          } else {
+            onClose();
+          }
+          return;
+        }
 
         showMessage(
           "We've sent a confirmation email to your email address. Please click the link in the email to verify your account and continue.",

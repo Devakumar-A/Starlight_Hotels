@@ -26,6 +26,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
 
   const userMenuRef = useRef(null);
+  const mobileUserMenuRef = useRef(null);
   const routerLocation = useLocation();
   const isHome = routerLocation.pathname === "/";
 
@@ -48,7 +49,9 @@ export default function Navbar() {
   // Close user dropdown menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+      const isInsideDesktop = userMenuRef.current && userMenuRef.current.contains(e.target);
+      const isInsideMobile = mobileUserMenuRef.current && mobileUserMenuRef.current.contains(e.target);
+      if (!isInsideDesktop && !isInsideMobile) {
         setUserMenuOpen(false);
       }
     };
@@ -303,20 +306,69 @@ export default function Navbar() {
 
             {/* Auth / Profile Trigger Button */}
             {user ? (
-              <button
-                type="button"
-                onClick={() => setUserMenuOpen((open) => !open)}
-                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-[#1f222a] border border-[#D4A247]/50 text-[#F3CF7A] text-xs font-bold transition active:scale-95"
-                aria-label="User profile"
-                title={displayName}
-              >
-                {displayName.charAt(0).toUpperCase()}
-              </button>
+              <div className="relative" ref={mobileUserMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen((open) => !open);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-[#1f222a] border border-[#D4A247]/50 text-[#F3CF7A] text-xs font-bold transition active:scale-95 cursor-pointer"
+                  aria-label="User profile"
+                  title={displayName}
+                >
+                  {displayName.charAt(0).toUpperCase()}
+                </button>
+
+                {/* Profile Dropdown Card (pasted from navigation drawer) */}
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-32px)] rounded-2xl border border-white/15 bg-[#0c101c]/98 backdrop-blur-2xl p-3 text-white shadow-[0_20px_50px_rgba(0,0,0,0.85)] z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-2">
+                    <div className="flex items-center gap-2.5 pb-2 border-b border-white/10">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-[#D7A441] to-[#B88428] text-neutral-950 font-bold text-xs shadow-xs shrink-0">
+                        {displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#D4A247]">Signed In</div>
+                        <div className="text-xs font-semibold text-white truncate">{user?.email}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-0.5">
+                      <Link
+                        to="/profile"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-semibold text-white transition active:scale-95 cursor-pointer"
+                      >
+                        <User size={13} className="text-[#D4A247]" />
+                        <span>Profile</span>
+                      </Link>
+                      <Link
+                        to="/my-bookings"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-semibold text-white transition active:scale-95 cursor-pointer"
+                      >
+                        <Calendar size={13} className="text-[#D4A247]" />
+                        <span>Bookings</span>
+                      </Link>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 transition cursor-pointer"
+                    >
+                      <LogOut size={13} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setAuthMode("login")}
-                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white/5 border border-white/15 text-[#D4A247] hover:bg-white/10 transition active:scale-95"
+                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white/5 border border-white/15 text-[#D4A247] hover:bg-white/10 transition active:scale-95 cursor-pointer"
                 aria-label="Sign In"
                 title="Sign In"
               >
@@ -329,6 +381,7 @@ export default function Navbar() {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                setUserMenuOpen(false);
                 setMobileMenuOpen((prev) => !prev);
               }}
               className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full border transition active:scale-95 z-50 cursor-pointer ${
@@ -343,44 +396,6 @@ export default function Navbar() {
           </div>
 
         </div>
-
-        {/* Mobile & Tablet User Dropdown (when user clicks profile badge on mobile) */}
-        {userMenuOpen && (
-          <div className="lg:hidden mx-4 mt-2 rounded-2xl border border-[#D4A247]/30 bg-[#0c101c]/98 backdrop-blur-2xl p-3.5 text-white shadow-2xl animate-in fade-in duration-150">
-            <div className="px-2 py-1.5 border-b border-white/10 mb-1.5">
-              <p className="text-[10px] uppercase tracking-wider text-[#D4A247] font-bold">
-                Signed in as
-              </p>
-              <p className="text-xs font-semibold text-white truncate mt-0.5">
-                {user?.email}
-              </p>
-            </div>
-            <Link
-              to="/profile"
-              onClick={() => setUserMenuOpen(false)}
-              className="flex items-center gap-2.5 w-full px-2.5 py-2 text-xs font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
-            >
-              <User size={14} className="text-[#D4A247]" />
-              <span>My Profile</span>
-            </Link>
-            <Link
-              to="/my-bookings"
-              onClick={() => setUserMenuOpen(false)}
-              className="flex items-center gap-2.5 w-full px-2.5 py-2 text-xs font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
-            >
-              <Calendar size={14} className="text-[#D4A247]" />
-              <span>My Bookings</span>
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex items-center gap-2.5 w-full px-2.5 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition mt-1"
-            >
-              <LogOut size={14} />
-              <span>Sign Out</span>
-            </button>
-          </div>
-        )}
 
         {/* Mobile & Tablet Full Navigation Drawer */}
         {mobileMenuOpen && (
@@ -520,46 +535,6 @@ export default function Navbar() {
                 </a>
               </div>
 
-              {/* Logged in User Profile Card */}
-              {user && (
-                <div className="rounded-2xl border border-white/15 bg-white/[0.05] p-3 space-y-2">
-                  <div className="flex items-center gap-2.5 pb-2 border-b border-white/10">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-[#D7A441] to-[#B88428] text-neutral-950 font-bold text-xs shadow-xs">
-                      {displayName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#D4A247]">Signed In</div>
-                      <div className="text-xs font-semibold text-white truncate">{user?.email}</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-0.5">
-                    <Link
-                      to="/profile"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-semibold text-white transition"
-                    >
-                      <User size={13} className="text-[#D4A247]" />
-                      <span>Profile</span>
-                    </Link>
-                    <Link
-                      to="/my-bookings"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-semibold text-white transition"
-                    >
-                      <Calendar size={13} className="text-[#D4A247]" />
-                      <span>Bookings</span>
-                    </Link>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 transition"
-                  >
-                    <LogOut size={13} />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              )}
 
               {/* Mobile Auth CTA if guest */}
               {!user && (
