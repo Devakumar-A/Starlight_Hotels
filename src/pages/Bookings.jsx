@@ -75,8 +75,8 @@ function getStarlightRating(id) {
     Number(score) >= 4.9
       ? "Exceptional"
       : Number(score) >= 4.7
-      ? "Superb"
-      : "Excellent";
+        ? "Superb"
+        : "Excellent";
 
   return { score, label, reviews };
 }
@@ -664,66 +664,60 @@ function Bookings() {
       setGuests(newGuests);
     }
   }
-  const handleBookNow = async (verifiedUser = null) => {
-    console.log("Book Now clicked");
+
+  const handleBookNow = async () => {
     setBookingError("");
 
-    // Validate guest information before booking
     if (!guestName.trim()) {
-      setBookingError("Please enter the primary guest full name.");
-      return;
-    }
-
-    if (!guestEmail.trim() || !/\S+@\S+\.\S+/.test(guestEmail.trim())) {
-      setBookingError("Please enter a valid guest email address.");
+      setBookingError("Please enter the primary guest's full name.");
       return;
     }
 
     const cleanPhone = guestPhone.trim();
-    if (!cleanPhone || !/^\+?[0-9]{10,15}$/.test(cleanPhone)) {
-      setBookingError("Please enter a valid 10-digit mobile number for check-in voucher.");
+
+    if (!/^\+?[0-9]{10,15}$/.test(cleanPhone)) {
+      setBookingError("Please enter a valid mobile number.");
       return;
     }
 
+    if (
+      guestEmail.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
+    ) {
+      setBookingError("Please enter a valid email address.");
+      return;
+    }
     try {
-      // Must have active valid session token to execute authenticated create_booking RPC
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-      if (!session || !session.user) {
-        console.log("NO ACTIVE SESSION → OPEN IN-PLACE AUTH MODAL");
-        setCurrentUser(null);
-        setAuthMode("login");
-        return;
+      // Allow guests when there is no active login session.
+      if (error && error.name !== "AuthSessionMissingError") {
+        throw error;
       }
 
-      const user = session.user;
-      setCurrentUser(user);
-      console.log("USER LOGGED IN:", user.id);
+      setCurrentUser(user || null);
 
-      // Ensure phone and name are synced to users table so backend RPC create_booking doesn't fail
-      try {
-        await supabase
+      if (user) {
+        // Update the signed-in user's profile.
+        const { error: updateError } = await supabase
           .from("users")
           .update({
             phone: cleanPhone,
             full_name: guestName.trim(),
           })
           .eq("id", user.id);
-      } catch (syncErr) {
-        console.warn("Could not sync phone/name to user profile:", syncErr);
+
+        if (updateError) throw updateError;
       }
 
-      // User is authenticated → continue booking
+      // Continue for both guests and signed-in customers.
       await completeBooking();
-
     } catch (error) {
       console.error("BOOKING ERROR:", error);
-
-      setBookingError(
-        error?.message || "Unable to continue booking."
-      );
+      setBookingError(error?.message || "Unable to continue booking.");
     }
   };
 
@@ -738,6 +732,10 @@ function Bookings() {
         checkOutDate: selectedCheckOut,
         roomCategoryId: categoryId,
         roomsRequested: rooms,
+        guestName: guestName.trim(),
+        guestPhone: guestPhone.trim(),
+        guestEmail: guestEmail.trim() || null,
+        guestAddress: null,
       });
 
       if (!result) {
@@ -746,55 +744,24 @@ function Bookings() {
 
       setBookingConfirmation(result);
 
-      // Clear the local draft upon completed reservation
       try {
         sessionStorage.removeItem(draftStorageKey);
-      } catch (e) {
-        console.warn(e);
+      } catch (error) {
+        console.warn("Could not clear booking draft:", error);
       }
 
-      // Refresh availability after successful booking
       await refreshAvailability();
     } catch (error) {
       console.error("BOOKING ERROR:", error);
-
       const message = error?.message || "";
 
-      if (
-        message.includes("permission denied for function create_booking") ||
-        message.includes("JWT") ||
-        message.includes("session")
-      ) {
-        setCurrentUser(null);
-        setBookingError("Please sign in or create an account to complete your reservation.");
-        setAuthMode("login");
-        return;
-      }
-
-      if (message.includes("Phone number is required")) {
-        setBookingError("");
-        setPhone(guestPhone || "");
-        setPhoneModalOpen(true);
-        return;
-      }
-
       if (message.includes("Not enough rooms")) {
-        setBookingError(
-          "Not enough rooms available for the selected dates."
-        );
-        return;
+        setBookingError("Not enough rooms available for the selected dates.");
+      } else if (message.includes("just booked")) {
+        setBookingError("The selected room was just booked. Please try again.");
+      } else {
+        setBookingError(message || "Unable to complete booking.");
       }
-
-      if (message.includes("just booked")) {
-        setBookingError(
-          "The selected room was just booked. Please try again."
-        );
-        return;
-      }
-
-      setBookingError(
-        message || "Unable to complete booking."
-      );
     } finally {
       setBookingLoading(false);
     }
@@ -1093,11 +1060,10 @@ function Bookings() {
                                 setSelectedCategoryId(cat.id);
                                 setCategory(cat);
                               }}
-                              className={`rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                                category?.id === cat.id
-                                  ? "bg-[#1B1E28] text-[#D7A441] shadow-xs ring-1 ring-[#D7A441]/40"
-                                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-                              }`}
+                              className={`rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${category?.id === cat.id
+                                ? "bg-[#1B1E28] text-[#D7A441] shadow-xs ring-1 ring-[#D7A441]/40"
+                                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                                }`}
                             >
                               {cat.category_name}
                             </button>
@@ -1198,7 +1164,7 @@ function Bookings() {
                   {/* Email */}
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
-                      Email Address <span className="text-red-500">*</span>
+                      Email Address <span className="text-neutral-400 font-normal normal-case">(Optional)</span>
                     </label>
                     <div className="relative">
                       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
@@ -1250,14 +1216,21 @@ function Bookings() {
                   </div>
                 </div>
 
+
                 {!currentUser && (
                   <div className="mt-5 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-3.5 flex items-center gap-3">
-                    <ShieldCheck size={18} className="text-[#D7A441] shrink-0" />
+                    <ShieldCheck
+                      size={18}
+                      className="text-[#D7A441] shrink-0"
+                    />
                     <p className="text-xs text-neutral-500 leading-relaxed">
-                      You are booking as a guest. When you click <strong className="text-neutral-800">Complete Reservation</strong>, you can sign in or create an account right here in 1 click without losing your entered details.
+                      You can complete your reservation as a guest without signing in
+                      or creating an account. Your booking reference will be displayed
+                      after your reservation is successfully created.
                     </p>
                   </div>
                 )}
+
               </div>
 
 
@@ -1941,16 +1914,28 @@ function Bookings() {
             </div>
 
             {/* Action Buttons */}
-            <button
-              type="button"
-              onClick={() => {
-                setBookingConfirmation(null);
-                navigate("/my-bookings");
-              }}
-              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md hover:shadow-lg cursor-pointer"
-            >
-              Check Status in My Bookings →
-            </button>
+
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingConfirmation(null);
+                  navigate("/my-bookings");
+                }}
+                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md cursor-pointer"
+              >
+                Check Status in My Bookings →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setBookingConfirmation(null)}
+                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md cursor-pointer"
+              >
+                Done
+              </button>
+            )}
+
 
             <button
               type="button"

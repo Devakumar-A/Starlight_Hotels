@@ -217,25 +217,31 @@ export async function getRoomCategoryAmenities(roomCategoryId) {
 // CREATE BOOKING
 // ---------------------------------------------------------
 
+
 export async function createBooking({
   numberOfGuests,
   checkInDate,
   checkOutDate,
   roomCategoryId,
   roomsRequested,
+  guestName,
+  guestPhone,
+  guestEmail,
+  guestAddress,
 }) {
-  const { data, error } = await supabase.rpc(
-    "create_booking",
-    {
-      p_number_of_guests: numberOfGuests,
-      p_check_in_date: checkInDate,
-      p_check_out_date: checkOutDate,
-      p_room_category_id: roomCategoryId,
-      p_rooms_requested: roomsRequested,
-    }
-  );
+  const { data, error } = await supabase.rpc("create_booking", {
+    p_number_of_guests: numberOfGuests,
+    p_check_in_date: checkInDate,
+    p_check_out_date: checkOutDate,
+    p_room_category_id: roomCategoryId,
+    p_rooms_requested: roomsRequested,
+    p_guest_name: guestName,
+    p_guest_phone: guestPhone,
+    p_guest_email: guestEmail,
+    p_guest_address: guestAddress,
+  });
 
   if (error) throw error;
 
-  return data?.[0] || null;
+  return Array.isArray(data) ? data[0] ?? null : data;
 }
