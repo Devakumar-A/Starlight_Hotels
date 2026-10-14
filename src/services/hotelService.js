@@ -1,3 +1,4 @@
+
 import { supabase } from "../lib/supabase";
 
 // ---------------------------------------------------------
@@ -20,10 +21,8 @@ export async function getHotels() {
     .order("hotel_name");
 
   if (error) throw error;
-
   return data || [];
 }
-
 
 // ---------------------------------------------------------
 // GET ONE HOTEL
@@ -46,10 +45,8 @@ export async function getHotelById(hotelId) {
     .maybeSingle();
 
   if (error) throw error;
-
   return data;
 }
-
 
 // ---------------------------------------------------------
 // GET HOTEL MEDIA
@@ -74,10 +71,8 @@ export async function getHotelMedia(hotelId) {
     .order("id", { ascending: true });
 
   if (error) throw error;
-
   return data || [];
 }
-
 
 // ---------------------------------------------------------
 // GET ROOM CATEGORIES
@@ -101,10 +96,8 @@ export async function getRoomCategories(hotelId) {
     .order("category_name");
 
   if (error) throw error;
-
   return data || [];
 }
-
 
 // ---------------------------------------------------------
 // GET AVAILABILITY
@@ -115,20 +108,15 @@ export async function getAvailability(
   checkInDate,
   checkOutDate
 ) {
-  const { data, error } = await supabase.rpc(
-    "get_availability",
-    {
-      p_hotel_id: hotelId,
-      p_check_in_date: checkInDate,
-      p_check_out_date: checkOutDate,
-    }
-  );
+  const { data, error } = await supabase.rpc("get_availability", {
+    p_hotel_id: hotelId,
+    p_check_in_date: checkInDate,
+    p_check_out_date: checkOutDate,
+  });
 
   if (error) throw error;
-
   return data || [];
 }
-
 
 // ---------------------------------------------------------
 // GET ROOM PRICING
@@ -139,20 +127,43 @@ export async function getRoomPricing(
   checkInDate,
   checkOutDate
 ) {
+  const { data, error } = await supabase.rpc("get_room_pricing", {
+    p_room_category_id: roomCategoryId,
+    p_check_in_date: checkInDate,
+    p_check_out_date: checkOutDate,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// ---------------------------------------------------------
+// CALCULATE COMPLETE BOOKING PRICE
+// Uses the new calculate_booking_price SQL function
+// ---------------------------------------------------------
+
+export async function calculateRoomPrice({
+  roomCategoryId,
+  checkInDate,
+  checkOutDate,
+  numberOfGuests,
+  roomsRequested,
+}) {
   const { data, error } = await supabase.rpc(
-    "get_room_pricing",
+    "calculate_booking_price",
     {
       p_room_category_id: roomCategoryId,
       p_check_in_date: checkInDate,
       p_check_out_date: checkOutDate,
+      p_number_of_guests: numberOfGuests,
+      p_rooms_requested: roomsRequested,
     }
   );
 
   if (error) throw error;
 
-  return data || [];
+  return data ?? null;
 }
-
 
 // ---------------------------------------------------------
 // GET AMENITIES FOR HOTEL
@@ -183,9 +194,13 @@ export async function getHotelAmenities(roomCategoryIds) {
     .eq("is_active", true);
 
   if (error) throw error;
-
   return data || [];
 }
+
+// ---------------------------------------------------------
+// GET AMENITIES FOR ONE ROOM CATEGORY
+// ---------------------------------------------------------
+
 export async function getRoomCategoryAmenities(roomCategoryId) {
   if (!roomCategoryId) return [];
 
@@ -209,14 +224,13 @@ export async function getRoomCategoryAmenities(roomCategoryId) {
     .eq("is_active", true);
 
   if (error) throw error;
-
   return data || [];
 }
 
 // ---------------------------------------------------------
 // CREATE BOOKING
+// Existing booking function — unchanged
 // ---------------------------------------------------------
-
 
 export async function createBooking({
   numberOfGuests,

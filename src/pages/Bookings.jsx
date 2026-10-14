@@ -49,6 +49,7 @@ import {
   getRoomCategories,
   getAvailability,
   getRoomPricing,
+  calculateRoomPrice,
   createBooking,
   getHotelMedia,
 } from "../services/hotelService";
@@ -137,7 +138,6 @@ function Bookings() {
   const queryCategoryId = searchParams.get("category");
 
   const [selectedCategoryId, setSelectedCategoryId] = useState(queryCategoryId);
-  const categoryId = selectedCategoryId || queryCategoryId || category?.id;
   const [availableCategories, setAvailableCategories] = useState([]);
 
   const checkIn = searchParams.get("checkIn") || getTomorrowDate();
@@ -151,9 +151,16 @@ function Bookings() {
 
   const [hotel, setHotel] = useState(null);
   const [category, setCategory] = useState(null);
+  const categoryId = selectedCategoryId || queryCategoryId || category?.id;
 
   const [availableRooms, setAvailableRooms] = useState(0);
   const [totalRooms, setTotalRooms] = useState(0);
+
+  const [priceSummary, setPriceSummary] = useState(null);
+
+  const [occupancy, setOccupancy] = useState(null);
+  const [occupancyLoading, setOccupancyLoading] = useState(false);
+  const [occupancyError, setOccupancyError] = useState("");
 
   const [pricing, setPricing] = useState([]);
   const [pricingLoading, setPricingLoading] = useState(false);
@@ -315,72 +322,76 @@ function Bookings() {
     };
   }, []);
 
-  // --------------------------------------------------
-  // LOAD HOTEL + CATEGORY
-  // --------------------------------------------------
 
+  // LOAD ROOM OCCUPANCY CONFIGURATION
   useEffect(() => {
-    async function loadDetails() {
+    let cancelled = false;
+
+    async function loadOccupancy() {
+      if (!categoryId) {
+        setOccupancy(null);
+        return;
+      }
+
       try {
-        setLoading(true);
-        setError("");
+        setOccupancyLoading(true);
+        setOccupancyError("");
 
-        let activeHotel = null;
-        let activeHotelId = hotelId;
+        const { data, error } = await supabase
+          .from("room_category_occupancy")
+          .select(
+            "minimum_accommodation, preferred_accommodation, maximum_accommodation"
+          )
+          .eq("room_category_id", categoryId)
+          .maybeSingle();
 
-        const hotels = await getHotels();
-        if (!hotels.length) {
-          throw new Error("No hotels found.");
+        if (error) throw error;
+
+        if (!data) {
+          throw new Error(
+            "Occupancy limits are not configured for this room category."
+          );
         }
 
-        if (activeHotelId) {
-          activeHotel = hotels.find((item) => item.id === activeHotelId);
-        } else {
-          activeHotel = hotels[0];
-          activeHotelId = activeHotel.id;
+        const minimum = Number(data.minimum_accommodation);
+        const preferred = Number(data.preferred_accommodation);
+        const maximum = Number(data.maximum_accommodation);
+
+        if (
+          !Number.isInteger(minimum) ||
+          !Number.isInteger(preferred) ||
+          !Number.isInteger(maximum) ||
+          minimum < 1 ||
+          minimum > preferred ||
+          preferred > maximum
+        ) {
+          throw new Error("Invalid room occupancy configuration.");
         }
 
-        if (!activeHotel) {
-          throw new Error("Hotel not found.");
+        if (!cancelled) {
+          setOccupancy({ minimum, preferred, maximum });
         }
-
-        const categories = await getRoomCategories(activeHotelId);
-        if (!categories || categories.length === 0) {
-          throw new Error("No room categories found for this hotel.");
+      } catch (error) {
+        if (!cancelled) {
+          setOccupancy(null);
+          setOccupancyError(
+            error.message || "Unable to load occupancy limits."
+          );
         }
-
-        setAvailableCategories(categories);
-
-        const chosenCategory =
-          categories.find((item) => item.id === (selectedCategoryId || queryCategoryId)) ||
-          categories[0];
-
-        setHotel(activeHotel);
-        setCategory(chosenCategory);
-        if (!selectedCategoryId) {
-          setSelectedCategoryId(chosenCategory.id);
-        }
-
-        try {
-          const media = await getHotelMedia(activeHotelId);
-          const firstImg = media?.find((m) => m.cloudinary_url)?.cloudinary_url || null;
-          setHotelImage(firstImg);
-        } catch (mediaErr) {
-          console.error("Hotel media load error:", mediaErr);
-        }
-      } catch (err) {
-        console.error(err);
-        setError(
-          err.message ||
-          "Unable to load booking details."
-        );
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setOccupancyLoading(false);
+        }
       }
     }
 
-    loadDetails();
-  }, [hotelId, selectedCategoryId]);
+    loadOccupancy();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId]);
+
 
   // --------------------------------------------------
   // LOAD SELECTED ROOM CATEGORY AMENITIES
@@ -414,6 +425,63 @@ function Bookings() {
 
     loadAmenities();
   }, [categoryId]);
+
+  // --------------------------------------------------
+  // LOAD HOTEL + CATEGORY
+  // --------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHotelAndCategory() {
+      try {
+        setLoading(true);
+        setError("");
+
+        if (!hotelId || !categoryId) {
+          throw new Error("Hotel or room category information is missing.");
+        }
+
+        const hotels = await getHotels();
+        const selectedHotel = hotels.find(
+          (item) => item.id === hotelId
+        );
+
+        if (!selectedHotel) {
+          throw new Error("Hotel not found.");
+        }
+
+        const categories = await getRoomCategories(hotelId);
+        const selectedCategory = categories.find(
+          (item) => item.id === categoryId
+        );
+
+        if (!selectedCategory) {
+          throw new Error("Room category not found.");
+        }
+
+        if (!cancelled) {
+          setHotel(selectedHotel);
+          setCategory(selectedCategory);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("HOTEL/CATEGORY ERROR:", err);
+          setError(err.message || "Unable to load booking details.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadHotelAndCategory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hotelId, categoryId]);
+
 
   // --------------------------------------------------
   // LOAD LIVE AVAILABILITY
@@ -608,29 +676,88 @@ function Bookings() {
     selectedCheckOut,
     nights,
   ]);
+  useEffect(() => {
+    let cancelled = false;
 
+    async function loadPriceSummary() {
+      if (!categoryId || !selectedCheckIn || !selectedCheckOut || nights <= 0) {
+        setPriceSummary(null);
+        return;
+      }
+
+      try {
+        setPricingLoading(true);
+        setPricingError("");
+
+        const result = await calculateRoomPrice({
+          roomCategoryId: categoryId,
+          checkInDate: selectedCheckIn,
+          checkOutDate: selectedCheckOut,
+          numberOfGuests: guests,
+          roomsRequested: rooms,
+        });
+
+        if (!cancelled) {
+          setPriceSummary(result);
+        }
+      } catch (err) {
+        console.error("PRICE SUMMARY ERROR:", {
+          message: err?.message,
+          details: err?.details,
+          hint: err?.hint,
+          code: err?.code,
+        });
+
+        if (!cancelled) {
+          setPriceSummary(null);
+          setPricingError("Unable to calculate booking price.");
+        }
+      } finally {
+        if (!cancelled) {
+          setPricingLoading(false);
+        }
+      }
+    }
+
+    loadPriceSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    categoryId,
+    selectedCheckIn,
+    selectedCheckOut,
+    guests,
+    rooms,
+    nights,
+    currentUser,
+  ]);
   // --------------------------------------------------
   // CALCULATIONS
   // --------------------------------------------------
 
-  const nightlyTotalPerRoom = pricing.reduce(
-    (total, item) => total + Number(item.price || 0),
-    0
-  );
+  const roomPrices = priceSummary?.room_prices || [];
+  const guestCounts = priceSummary?.guest_counts || [];
 
   const averagePricePerNight =
-    nights > 0
-      ? nightlyTotalPerRoom / nights
-      : 0;
+    Number(priceSummary?.average_nightly_rate) || 0;
 
-  const roomTotal =
-    nightlyTotalPerRoom * rooms;
+  const subtotal = Number(priceSummary?.subtotal) || 0;
+  const gstAmount = Number(priceSummary?.gst_amount) || 0;
+  const signInDiscount = Number(priceSummary?.sign_in_discount) || 0;
+  const finalTotal = Number(priceSummary?.final_total) || 0;
 
-  const maxGuestsPerRoom =
-    Number(category?.max_occupancy) || 1;
 
-  const maximumGuests =
-    maxGuestsPerRoom * rooms;
+  const roomTotal = finalTotal;
+
+  const minimumGuestsPerRoom = occupancy?.minimum ?? 1;
+  const preferredGuestsPerRoom = occupancy?.preferred ?? 1;
+  const maxGuestsPerRoom = occupancy?.maximum ?? 1;
+
+  const minimumGuests = minimumGuestsPerRoom * rooms;
+  const maximumGuests = maxGuestsPerRoom * rooms;
+
 
   // --------------------------------------------------
   // ROOM CONTROLS
@@ -639,12 +766,14 @@ function Bookings() {
   function decreaseRooms() {
     setRooms((current) => {
       const newValue = Math.max(1, current - 1);
-
-      const newMaximum =
-        maxGuestsPerRoom * newValue;
+      const newMaximum = maxGuestsPerRoom * newValue;
+      const newMinimum = minimumGuestsPerRoom * newValue;
 
       setGuests((currentGuests) =>
-        Math.min(currentGuests, newMaximum)
+        Math.min(
+          newMaximum,
+          Math.max(newMinimum, currentGuests)
+        )
       );
 
       return newValue;
@@ -654,13 +783,26 @@ function Bookings() {
   function increaseRooms() {
     if (rooms >= availableRooms) return;
 
-    setRooms((current) => current + 1);
+    const newRooms = rooms + 1;
+
+    setRooms(newRooms);
+
+    setGuests((currentGuests) =>
+      Math.max(
+        currentGuests,
+        minimumGuestsPerRoom * newRooms
+      )
+    );
   }
 
   function changeGuests(value) {
     const newGuests = Number(value);
 
-    if (newGuests <= maximumGuests) {
+    if (
+      Number.isInteger(newGuests) &&
+      newGuests >= minimumGuests &&
+      newGuests <= maximumGuests
+    ) {
       setGuests(newGuests);
     }
   }
@@ -1608,18 +1750,21 @@ function Bookings() {
                       className="rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-semibold text-neutral-800 shadow-xs outline-none focus:border-[#D7A441] focus:ring-2 focus:ring-[#D7A441]/20 cursor-pointer"
                     >
                       {Array.from(
-                        { length: maximumGuests },
-                        (_, index) => index + 1
-                      ).map((value) => (
-                        <option key={value} value={value}>
-                          {value} {value === 1 ? "Guest" : "Guests"}
+                        { length: maximumGuests - minimumGuests + 1 },
+                        (_, index) => minimumGuests + index
+                      ).map((count) => (
+                        <option key={count} value={count}>
+                          {count} {count === 1 ? "Guest" : "Guests"}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <p className="mt-2.5 text-[11px] text-neutral-400">
-                    Max room occupancy: <strong className="text-neutral-700">{maximumGuests} guests</strong>
+                    Occupancy range:{" "}
+                    <strong className="text-neutral-700">
+                      {minimumGuests}–{maximumGuests} guests
+                    </strong>
                   </p>
 
                   {guests >= maximumGuests && (
@@ -1628,6 +1773,12 @@ function Bookings() {
                     </p>
                   )}
                 </div>
+
+                {occupancyError && (
+                  <p className="px-5 pb-3 text-xs text-red-600">
+                    {occupancyError}
+                  </p>
+                )}
 
 
                 {/* ROOMS SELECTOR & LIVE INVENTORY */}
@@ -1695,8 +1846,6 @@ function Bookings() {
                     </p>
                   )}
                 </div>
-
-
                 {/* PRICE BREAKDOWN TABLE */}
                 <div className="p-5 sm:p-6 bg-[#FCFCFD]">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
@@ -1704,18 +1853,32 @@ function Bookings() {
                   </h4>
 
                   <div className="mt-4 space-y-3 text-xs sm:text-sm">
-                    <div className="flex items-center justify-between text-neutral-600">
-                      <div>
-                        <span>Average Nightly Rate</span>
-                        <p className="text-[11px] text-neutral-400">
-                          ₹{averagePricePerNight.toLocaleString("en-IN")} × {rooms} {rooms === 1 ? "room" : "rooms"}
-                        </p>
-                      </div>
-                      <span className="font-semibold text-neutral-900">
-                        ₹{(averagePricePerNight * rooms).toLocaleString("en-IN")}
-                      </span>
-                    </div>
+                    {/* Individual room prices */}
+                    {roomPrices.map((price, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between text-neutral-600"
+                      >
+                        <div>
+                          <span>Room {index + 1} Price</span>
+                          <p className="text-[11px] text-neutral-400">
+                            {guestCounts[index]}{" "}
+                            {guestCounts[index] === 1 ? "guest" : "guests"}
+                          </p>
+                        </div>
 
+                        <span className="font-semibold text-neutral-900">
+                          ₹{(Number(price) / Math.max(nights, 1)).toLocaleString("en-IN", {
+                            maximumFractionDigits: 2,
+                          })}
+                          <span className="text-[10px] font-normal text-neutral-400">
+                            {" "}/ night
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Stay duration */}
                     <div className="flex items-center justify-between text-neutral-600">
                       <span>Stay Duration</span>
                       <span className="font-semibold text-neutral-900">
@@ -1723,315 +1886,355 @@ function Bookings() {
                       </span>
                     </div>
 
+                    {/* Subtotal */}
                     <div className="flex items-center justify-between text-neutral-600">
-                      <span>Taxes & Service Fees</span>
-                      <span className="font-semibold text-emerald-700">
-                        Itemized at final invoice
+                      <span>Subtotal</span>
+                      <span className="font-semibold text-neutral-900">
+                        ₹{subtotal.toLocaleString("en-IN", {
+                          maximumFractionDigits: 2,
+                        })}
                       </span>
                     </div>
 
-                    {/* Date-wise explanation badge */}
-                    <div className="rounded-xl bg-neutral-100/80 p-3 text-[11px] leading-relaxed text-neutral-500">
-                      Exact total calculated by summing nightly date-wise pricing across {rooms} {rooms === 1 ? "room" : "rooms"} for {nights} {nights === 1 ? "night" : "nights"}.
+                    {/* GST */}
+                    <div className="flex items-center justify-between text-neutral-600">
+                      <span>GST (5%)</span>
+                      <span className="font-semibold text-neutral-900">
+                        ₹{gstAmount.toLocaleString("en-IN", {
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
                     </div>
 
-                    {/* Total Amount */}
+                    {/* Sign-in discount */}
+                    {signInDiscount > 0 && (
+                      <div className="flex items-center justify-between text-emerald-700">
+                        <span>Sign-in Discount (10%)</span>
+                        <span className="font-semibold">
+                          −₹{signInDiscount.toLocaleString("en-IN", {
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Date-wise explanation */}
+                    <div className="rounded-xl bg-neutral-100/80 p-3 text-[11px] leading-relaxed text-neutral-500">
+                      Room prices are calculated using date-wise rates and the guest
+                      allocation for each selected room. The displayed room price is
+                      the average per night for your selected stay.
+                    </div>
+
+                    {/* Final total */}
                     <div className="border-t border-neutral-200/80 pt-4">
                       <div className="flex items-baseline justify-between">
                         <div>
-                          <p className="text-sm font-bold text-neutral-900">Total Amount</p>
-                          <p className="text-[10px] text-neutral-400">Guaranteed direct booking rate</p>
+                          <p className="text-sm font-bold text-neutral-900">
+                            Total Amount
+                          </p>
+                          <p className="text-[10px] text-neutral-400">
+                            Includes GST and applicable discounts
+                          </p>
                         </div>
+
                         <p className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900">
-                          ₹{roomTotal.toLocaleString("en-IN")}
+                          ₹{finalTotal.toLocaleString("en-IN", {
+                            maximumFractionDigits: 2,
+                          })}
                         </p>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* GUEST RECOGNITION STATUS */}
-                  {currentUser ? (
-                    <div className="mt-5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 p-3 text-xs text-emerald-900 flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                        <span className="truncate">
-                          Reserving as <strong className="text-neutral-900">{guestName || currentUser.email}</strong>
-                        </span>
-                      </div>
+                {/* GUEST RECOGNITION STATUS */}
+                {currentUser ? (
+                  <div className="mt-5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 p-3 text-xs text-emerald-900 flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                      <span className="truncate">
+                        Reserving as <strong className="text-neutral-900">{guestName || currentUser.email}</strong>
+                      </span>
                     </div>
-                  ) : (
-                    <div className="mt-5 rounded-2xl bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 flex items-start gap-2">
-                      <Sparkles size={15} className="text-[#D7A441] shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-amber-900/90 leading-relaxed">
-                        Guest details are retained securely during sign in / sign up.
-                      </p>
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 flex items-start gap-2">
+                    <Sparkles size={15} className="text-[#D7A441] shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      Guest details are retained securely during sign in / sign up.
+                    </p>
+                  </div>
+                )}
+
+                {/* ACTION BUTTON */}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={handleBookNow}
+                    disabled={
+                      bookingLoading || occupancyLoading || !occupancy || !!occupancyError ||
+                      availableRooms <= 0 ||
+                      rooms > availableRooms ||
+                      nights <= 0
+                    }
+                    className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 font-bold py-4 px-6 text-sm sm:text-base shadow-md hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:from-neutral-300 disabled:to-neutral-300 disabled:text-neutral-500 cursor-pointer"
+                  >
+                    {bookingLoading ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-900 border-t-transparent" />
+                        <span>Securing Your Stay...</span>
+                        pricingLoading || !priceSummary
+                      </>
+                    ) : (
+                      <>
+                        <span>Complete Reservation</span>
+                        <ChevronRight
+                          size={18}
+                          className="transition-transform group-hover:translate-x-1"
+                        />
+                      </>
+                    )}
+                  </button>
+
+                  {bookingError && (
+                    <div className="mt-3 flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium">
+                      <AlertCircle size={15} className="shrink-0 text-red-600" />
+                      <span>{bookingError}</span>
                     </div>
                   )}
 
-                  {/* ACTION BUTTON */}
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={handleBookNow}
-                      disabled={
-                        bookingLoading ||
-                        availableRooms <= 0 ||
-                        rooms > availableRooms ||
-                        nights <= 0
-                      }
-                      className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 font-bold py-4 px-6 text-sm sm:text-base shadow-md hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:from-neutral-300 disabled:to-neutral-300 disabled:text-neutral-500 cursor-pointer"
+                  <p className="mt-3 text-center text-[11px] text-neutral-400 leading-relaxed">
+                    By proceeding, you accept Starlight's{" "}
+                    <Link
+                      to="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-neutral-600 underline underline-offset-2 transition-colors hover:text-[#B88428]"
                     >
-                      {bookingLoading ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-900 border-t-transparent" />
-                          <span>Securing Your Stay...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Complete Reservation</span>
-                          <ChevronRight
-                            size={18}
-                            className="transition-transform group-hover:translate-x-1"
-                          />
-                        </>
-                      )}
-                    </button>
-
-                    {bookingError && (
-                      <div className="mt-3 flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium">
-                        <AlertCircle size={15} className="shrink-0 text-red-600" />
-                        <span>{bookingError}</span>
-                      </div>
-                    )}
-
-                    <p className="mt-3 text-center text-[11px] text-neutral-400 leading-relaxed">
-                      By proceeding, you accept Starlight's{" "}
-                      <Link
-                        to="/terms"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-neutral-600 underline underline-offset-2 transition-colors hover:text-[#B88428]"
-                      >
-                        Terms &amp; Conditions
-                      </Link>{" "}
-                      and{" "}
-                      <Link
-                        to="/privacy"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-neutral-600 underline underline-offset-2 transition-colors hover:text-[#B88428]"
-                      >
-                        Privacy Policy
-                      </Link>
-                      . Direct front-desk booking settlement.
-                    </p>
-                  </div>
-
+                      Terms &amp; Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      to="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-neutral-600 underline underline-offset-2 transition-colors hover:text-[#B88428]"
+                    >
+                      Privacy Policy
+                    </Link>
+                    . Direct front-desk booking settlement.
+                  </p>
                 </div>
-              </div>
 
+              </div>
             </aside>
 
           </div>
-        </section>
+        </section >
 
-      </main>
+      </main >
 
       {/* GLOBAL FOOTER */}
-      <Footer />
+      < Footer />
 
       {/* =================================================
         BOOKING CONFIRMATION MODAL (Yellow / Pending Design)
       ================================================= */}
-      {bookingConfirmation && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-xs px-4 animate-fadeIn">
-          <div className="relative w-full max-w-md rounded-3xl bg-white p-7 sm:p-8 text-center shadow-2xl border border-neutral-200">
+      {
+        bookingConfirmation && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-xs px-4 animate-fadeIn">
+            <div className="relative w-full max-w-md rounded-3xl bg-white p-7 sm:p-8 text-center shadow-2xl border border-neutral-200">
 
-            {/* Close 'X' Button */}
-            <button
-              type="button"
-              onClick={() => setBookingConfirmation(null)}
-              className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors cursor-pointer"
-              aria-label="Close modal"
-            >
-              <X size={18} />
-            </button>
-
-            {/* Yellow / Amber Indicator */}
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-[#B88428] ring-8 ring-amber-100/70 shadow-sm">
-              <Clock size={40} className="stroke-[2.2] text-[#B88428]" />
-            </div>
-
-            <h2 className="mt-5 text-2xl font-bold tracking-tight text-neutral-900 font-serif">
-              Reservation Request Sent!
-            </h2>
-
-            <p className="mt-2 text-xs sm:text-sm text-neutral-600 leading-relaxed">
-              Your reservation request for <strong className="text-neutral-900">{hotel.hotel_name}</strong> has been submitted. Please wait for confirmation.
-            </p>
-
-            {/* Yellow Status Info Notice */}
-            <div className="mt-4 rounded-2xl bg-amber-50/90 border border-amber-200/80 p-3.5 text-xs text-amber-950 flex items-start gap-2.5 text-left">
-              <Sparkles size={16} className="text-[#B88428] shrink-0 mt-0.5" />
-              <p className="text-[11px] leading-relaxed">
-                <strong>Pending Confirmation:</strong> To view the real-time status of your booking, please check the <strong>My Bookings</strong> page.
-              </p>
-            </div>
-
-            <div className="mt-5 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-5 text-left text-xs sm:text-sm space-y-2.5">
-              <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
-                <span className="text-neutral-500 font-medium">Booking Reference</span>
-                <span className="font-mono font-bold text-[#B88428] bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/80">
-                  {bookingConfirmation.booking_reference}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
-                <span className="text-neutral-500 font-medium">Booking Status</span>
-                <span className="font-semibold text-[#B88428] bg-amber-50/80 px-2.5 py-0.5 rounded-full border border-amber-200 text-xs">
-                  Pending Confirmation
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
-                <span className="text-neutral-500 font-medium">Category</span>
-                <strong className="text-neutral-800">{category.category_name}</strong>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
-                <span className="text-neutral-500 font-medium">Allocated Rooms</span>
-                <strong className="text-neutral-800">
-                  {bookingConfirmation.room_ids?.length || rooms} {rooms === 1 ? "Room" : "Rooms"}
-                </strong>
-              </div>
-
-              <div className="flex justify-between items-center py-1">
-                <span className="text-neutral-500 font-medium">Total Amount</span>
-                <strong className="text-base text-neutral-900 font-bold">
-                  ₹{Number(bookingConfirmation.total_amount || roomTotal).toLocaleString("en-IN")}
-                </strong>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-
-            {currentUser ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setBookingConfirmation(null);
-                  navigate("/my-bookings");
-                }}
-                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md cursor-pointer"
-              >
-                Check Status in My Bookings →
-              </button>
-            ) : (
+              {/* Close 'X' Button */}
               <button
                 type="button"
                 onClick={() => setBookingConfirmation(null)}
-                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md cursor-pointer"
+                className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors cursor-pointer"
+                aria-label="Close modal"
               >
-                Done
+                <X size={18} />
               </button>
-            )}
 
-
-            <button
-              type="button"
-              onClick={() => setBookingConfirmation(null)}
-              className="mt-2.5 w-full py-2.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 transition-colors cursor-pointer"
-            >
-              Close Window
-            </button>
-
-          </div>
-        </div>
-      )}
-
-      {/* AUTH MODAL */}
-      {authMode && (
-        <AuthModal
-          mode={authMode}
-          initialEmail={guestEmail}
-          initialPhone={guestPhone}
-          initialName={guestName}
-          onClose={() => setAuthMode(null)}
-          onSwitch={(mode) => setAuthMode(mode)}
-          onSuccess={async (loggedInUser) => {
-            setAuthMode(null);
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-
-            const activeUser = loggedInUser || session?.user;
-            if (activeUser && session) {
-              setCurrentUser(activeUser);
-              if (guestPhone) {
-                try {
-                  await supabase
-                    .from("users")
-                    .update({
-                      phone: guestPhone.trim(),
-                      full_name: guestName.trim(),
-                    })
-                    .eq("id", activeUser.id);
-                } catch (e) {
-                  console.warn("Phone sync error:", e);
-                }
-              }
-              await completeBooking();
-            }
-          }}
-        />
-      )}
-
-      {/* PHONE NUMBER MODAL */}
-      {phoneModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xs px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-7 sm:p-8 shadow-2xl border border-neutral-200">
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-[#B88428]">
-              <Sparkles size={22} />
-            </div>
-
-            <h2 className="mt-4 text-2xl font-bold tracking-tight text-neutral-900">
-              Phone Number Required
-            </h2>
-
-            <p className="mt-2 text-xs sm:text-sm text-neutral-500">
-              To send your booking voucher and secure front-desk check-in, please verify your mobile number.
-            </p>
-
-            <form onSubmit={handlePhoneSubmit} className="mt-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
-                  Mobile Number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] px-4 py-3.5 text-sm font-semibold outline-none focus:border-[#D7A441] focus:ring-2 focus:ring-[#D7A441]/20 transition-all"
-                />
+              {/* Yellow / Amber Indicator */}
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-[#B88428] ring-8 ring-amber-100/70 shadow-sm">
+                <Clock size={40} className="stroke-[2.2] text-[#B88428]" />
               </div>
 
+              <h2 className="mt-5 text-2xl font-bold tracking-tight text-neutral-900 font-serif">
+                Reservation Request Sent!
+              </h2>
+
+              <p className="mt-2 text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                Your reservation request for <strong className="text-neutral-900">{hotel.hotel_name}</strong> has been submitted. Please wait for confirmation.
+              </p>
+
+              {/* Yellow Status Info Notice */}
+              <div className="mt-4 rounded-2xl bg-amber-50/90 border border-amber-200/80 p-3.5 text-xs text-amber-950 flex items-start gap-2.5 text-left">
+                <Sparkles size={16} className="text-[#B88428] shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-relaxed">
+                  <strong>Pending Confirmation:</strong> To view the real-time status of your booking, please check the <strong>My Bookings</strong> page.
+                </p>
+              </div>
+
+              <div className="mt-5 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-5 text-left text-xs sm:text-sm space-y-2.5">
+                <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
+                  <span className="text-neutral-500 font-medium">Booking Reference</span>
+                  <span className="font-mono font-bold text-[#B88428] bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/80">
+                    {bookingConfirmation.booking_reference}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
+                  <span className="text-neutral-500 font-medium">Booking Status</span>
+                  <span className="font-semibold text-[#B88428] bg-amber-50/80 px-2.5 py-0.5 rounded-full border border-amber-200 text-xs">
+                    Pending Confirmation
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
+                  <span className="text-neutral-500 font-medium">Category</span>
+                  <strong className="text-neutral-800">{category.category_name}</strong>
+                </div>
+
+                <div className="flex justify-between items-center py-1 border-b border-neutral-200/60">
+                  <span className="text-neutral-500 font-medium">Allocated Rooms</span>
+                  <strong className="text-neutral-800">
+                    {bookingConfirmation.room_ids?.length || rooms} {rooms === 1 ? "Room" : "Rooms"}
+                  </strong>
+                </div>
+
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-neutral-500 font-medium">Total Amount</span>
+                  <strong className="text-base text-neutral-900 font-bold">
+                    ₹{Number(bookingConfirmation.total_amount || roomTotal).toLocaleString("en-IN")}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookingConfirmation(null);
+                    navigate("/my-bookings");
+                  }}
+                  className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md cursor-pointer"
+                >
+                  Check Status in My Bookings →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBookingConfirmation(null)}
+                  className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] text-neutral-950 font-bold py-3.5 text-sm sm:text-base transition-all shadow-md cursor-pointer"
+                >
+                  Done
+                </button>
+              )}
+
+
               <button
-                type="submit"
-                disabled={phoneSaving}
-                className="w-full rounded-2xl bg-gradient-to-r from-[#D7A441] to-[#B88428] py-3.5 font-bold text-neutral-950 shadow-md hover:shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                type="button"
+                onClick={() => setBookingConfirmation(null)}
+                className="mt-2.5 w-full py-2.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 transition-colors cursor-pointer"
               >
-                {phoneSaving ? "Saving & Proceeding..." : "Save & Complete Booking"}
+                Close Window
               </button>
-            </form>
 
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-    </div>
+      {/* AUTH MODAL */}
+      {
+        authMode && (
+          <AuthModal
+            mode={authMode}
+            initialEmail={guestEmail}
+            initialPhone={guestPhone}
+            initialName={guestName}
+            onClose={() => setAuthMode(null)}
+            onSwitch={(mode) => setAuthMode(mode)}
+            onSuccess={async (loggedInUser) => {
+              setAuthMode(null);
+              const {
+                data: { session },
+              } = await supabase.auth.getSession();
+
+              const activeUser = loggedInUser || session?.user;
+              if (activeUser && session) {
+                setCurrentUser(activeUser);
+                if (guestPhone) {
+                  try {
+                    await supabase
+                      .from("users")
+                      .update({
+                        phone: guestPhone.trim(),
+                        full_name: guestName.trim(),
+                      })
+                      .eq("id", activeUser.id);
+                  } catch (e) {
+                    console.warn("Phone sync error:", e);
+                  }
+                }
+                await completeBooking();
+              }
+            }}
+          />
+        )
+      }
+
+      {/* PHONE NUMBER MODAL */}
+      {
+        phoneModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xs px-4">
+            <div className="w-full max-w-md rounded-3xl bg-white p-7 sm:p-8 shadow-2xl border border-neutral-200">
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-[#B88428]">
+                <Sparkles size={22} />
+              </div>
+
+              <h2 className="mt-4 text-2xl font-bold tracking-tight text-neutral-900">
+                Phone Number Required
+              </h2>
+
+              <p className="mt-2 text-xs sm:text-sm text-neutral-500">
+                To send your booking voucher and secure front-desk check-in, please verify your mobile number.
+              </p>
+
+              <form onSubmit={handlePhoneSubmit} className="mt-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
+                    Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] px-4 py-3.5 text-sm font-semibold outline-none focus:border-[#D7A441] focus:ring-2 focus:ring-[#D7A441]/20 transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={phoneSaving}
+                  className="w-full rounded-2xl bg-gradient-to-r from-[#D7A441] to-[#B88428] py-3.5 font-bold text-neutral-950 shadow-md hover:shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                >
+                  {phoneSaving ? "Saving & Proceeding..." : "Save & Complete Booking"}
+                </button>
+              </form>
+
+            </div>
+          </div>
+        )
+      }
+
+    </div >
   );
 }
 
