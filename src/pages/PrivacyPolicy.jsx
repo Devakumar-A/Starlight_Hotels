@@ -2224,9 +2224,17 @@ export default function PrivacyPolicy() {
                       <strong className="text-neutral-900 block font-semibold mb-0.5">
                         Data Fiduciary:
                       </strong>
-                      <span>
+                      <p>
                         Ilavarasan (Proprietor), trading as Starlight Hotels. Principal place of business: No. 50, Lenin Street, Kosapalayam, Puducherry - 605013, India.
-                      </span>
+                      </p>
+                      <p className="flex flex-wrap items-center gap-2 pt-1.5 text-[11px] sm:text-xs text-neutral-700">
+                        <span className="inline-flex items-center rounded-md bg-white px-2 py-0.5 font-mono border border-neutral-200/80">
+                          <strong className="mr-1 text-neutral-900">GSTIN:</strong> 34AAYPI7697D2Z0
+                        </span>
+                        <span className="inline-flex items-center rounded-md bg-white px-2 py-0.5 font-mono border border-neutral-200/80">
+                          <strong className="mr-1 text-neutral-900">Udyam Reg. No.:</strong> UDYAM-PY-03-0011700
+                        </span>
+                      </p>
                     </div>
 
                     <div className="rounded-lg bg-white p-3 border border-neutral-200/80">

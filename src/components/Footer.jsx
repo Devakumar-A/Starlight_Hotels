@@ -551,25 +551,10 @@ export default function Footer() {
         </div>
 
         {/* ============================================================
-            BOTTOM BAR: BUSINESS DETAILS, COPYRIGHT & LEGAL
+            BOTTOM BAR: COPYRIGHT & LEGAL
         ============================================================ */}
-        <div className="pt-8 border-t border-white/10 space-y-4 text-xs text-white/70">
-          {/* Verified Business Details */}
-          <div className="flex flex-col gap-1.5 text-center sm:text-left text-[11px] sm:text-xs leading-relaxed text-white/75">
-            <p className="font-medium text-white/90">
-              Ilavarasan (Proprietor), trading as Starlight Hotels
-            </p>
-            <p>
-              No. 50, Lenin Street, Kosapalayam, Puducherry - 605013
-            </p>
-            <p className="text-white/65">
-              <span>GSTIN: 34AAYPI7697D2Z0</span>
-              <span className="mx-2 text-white/30">|</span>
-              <span>Udyam Reg. No.: UDYAM-PY-03-0011700</span>
-            </p>
-          </div>
-
-          <div className="flex flex-col items-center justify-between gap-4 pt-4 border-t border-white/5 sm:flex-row">
+        <div className="pt-8 border-t border-white/10 text-xs text-white/70">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p>© {new Date().getFullYear()} Starlight Hotels. All Rights Reserved.</p>
 
             <div className="flex items-center gap-4 sm:gap-6 flex-wrap justify-center sm:justify-end">

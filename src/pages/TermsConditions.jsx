@@ -846,7 +846,7 @@ export default function TermsConditions() {
                 </p>
 
                 <p>
-                  Throughout this document, the terms &quot;Starlight Hotels&quot;, &quot;we&quot;, &quot;us&quot;, and &quot;our&quot; refer to Starlight Hotels. The terms &quot;User&quot;, &quot;Guest&quot;, and &quot;You&quot; refer to any individual or entity accessing the website, initiating inquiries, making reservations, or staying at Starlight Hotels.
+                  Throughout this document, the terms &quot;Starlight Hotels&quot;, &quot;we&quot;, &quot;us&quot;, and &quot;our&quot; refer to Starlight Hotels (sole proprietorship operated by Ilavarasan, trading as Starlight Hotels; Principal place of business: No. 50, Lenin Street, Kosapalayam, Puducherry - 605013; GSTIN: 34AAYPI7697D2Z0 | Udyam Reg. No.: UDYAM-PY-03-0011700). The terms &quot;User&quot;, &quot;Guest&quot;, and &quot;You&quot; refer to any individual or entity accessing the website, initiating inquiries, making reservations, or staying at Starlight Hotels.
                 </p>
 
                 <div className="mt-3.5 sm:mt-4 rounded-xl border border-neutral-200 bg-[#FAF9F6] p-3 sm:p-4.5 min-w-0">
@@ -2096,6 +2096,34 @@ export default function TermsConditions() {
                       <span className="block text-[11px] text-neutral-500 mt-1">
                         General Support &amp; Policy Inquiries
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Verified Legal Entity & Statutory Registration Details */}
+                  <div className="mt-4 pt-4 border-t border-neutral-200/80 space-y-3 text-xs sm:text-[13px] text-neutral-700">
+                    <div className="rounded-lg bg-white p-3.5 sm:p-4 border border-neutral-200/80 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ShieldCheck size={15} className="text-[#9B111E] shrink-0" />
+                        <strong className="text-neutral-900 font-semibold text-xs sm:text-sm">
+                          Legal Entity &amp; Statutory Business Details
+                        </strong>
+                      </div>
+                      <div className="space-y-1.5 text-neutral-600">
+                        <p>
+                          <strong className="text-neutral-800">Legal Entity:</strong> Ilavarasan (Proprietor), trading as Starlight Hotels
+                        </p>
+                        <p>
+                          <strong className="text-neutral-800">Principal Place of Business:</strong> No. 50, Lenin Street, Kosapalayam, Puducherry - 605013, India
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] sm:text-xs text-neutral-700">
+                          <span className="inline-flex items-center rounded-md bg-[#FAF9F6] px-2.5 py-1 font-mono border border-neutral-200/80">
+                            <strong className="mr-1.5 text-neutral-900">GSTIN:</strong> 34AAYPI7697D2Z0
+                          </span>
+                          <span className="inline-flex items-center rounded-md bg-[#FAF9F6] px-2.5 py-1 font-mono border border-neutral-200/80">
+                            <strong className="mr-1.5 text-neutral-900">Udyam Reg. No.:</strong> UDYAM-PY-03-0011700
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
