@@ -17,18 +17,47 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import chennai04 from "../assets/hero/chennai/Chennai_04.png";
-import pondicherry01 from "../assets/hero/pondicherry/Pondicherry_01.png";
-import kodaikanal01 from "../assets/hero/kodaikanal/kodaikanal_01.png";
-import chennai01 from "../assets/hero/chennai/Chennai_01.png";
-import pondicherry02 from "../assets/hero/pondicherry/Pondicherry_02.png";
-import kodaikanal02 from "../assets/hero/kodaikanal/kodaikanal_02.png";
+import chennai04 from "../assets/hero/chennai/Chennai_04.webp";
+
+import pondicherry01 from "../assets/hero/pondicherry/Pondicherry_01.webp";
+import pondicherry01_480 from "../assets/hero/pondicherry/Pondicherry_01-480.webp";
+import pondicherry01_768 from "../assets/hero/pondicherry/Pondicherry_01-768.webp";
+import pondicherry01_1200 from "../assets/hero/pondicherry/Pondicherry_01-1200.webp";
+
+import kodaikanal01 from "../assets/hero/kodaikanal/kodaikanal_01.webp";
+import kodaikanal01_480 from "../assets/hero/kodaikanal/kodaikanal_01-480.webp";
+import kodaikanal01_768 from "../assets/hero/kodaikanal/kodaikanal_01-768.webp";
+import kodaikanal01_1200 from "../assets/hero/kodaikanal/kodaikanal_01-1200.webp";
+
+import chennai01 from "../assets/hero/chennai/Chennai_01.webp";
+import chennai01_480 from "../assets/hero/chennai/Chennai_01-480.webp";
+import chennai01_768 from "../assets/hero/chennai/Chennai_01-768.webp";
+import chennai01_1200 from "../assets/hero/chennai/Chennai_01-1200.webp";
+
+import pondicherry02 from "../assets/hero/pondicherry/Pondicherry_02.webp";
+import kodaikanal02 from "../assets/hero/kodaikanal/kodaikanal_02.webp";
 
 const HERO_IMAGES = [
-  { src: chennai04, alt: "Besant Nagar Beach & Lighthouse Chennai" },
-  { src: pondicherry01, alt: "Pondicherry Heritage Monument" },
-  { src: kodaikanal01, alt: "Kodaikanal Hill Station" },
-  { src: chennai01, alt: "Chennai Architecture" },
+  {
+    src: "/hero/chennai_04-768w.webp",
+    srcSet: "/hero/chennai_04-480w.webp 480w, /hero/chennai_04-768w.webp 768w, /hero/chennai_04-1200w.webp 1200w, /hero/chennai_04-1672w.webp 1672w",
+    alt: "Besant Nagar Beach & Lighthouse Chennai",
+  },
+  {
+    src: pondicherry01,
+    srcSet: `${pondicherry01_480} 480w, ${pondicherry01_768} 768w, ${pondicherry01_1200} 1200w, ${pondicherry01} 1672w`,
+    alt: "Pondicherry Heritage Monument",
+  },
+  {
+    src: kodaikanal01,
+    srcSet: `${kodaikanal01_480} 480w, ${kodaikanal01_768} 768w, ${kodaikanal01_1200} 1200w, ${kodaikanal01} 1672w`,
+    alt: "Kodaikanal Hill Station",
+  },
+  {
+    src: chennai01,
+    srcSet: `${chennai01_480} 480w, ${chennai01_768} 768w, ${chennai01_1200} 1200w, ${chennai01} 1672w`,
+    alt: "Chennai Architecture",
+  },
   { src: pondicherry02, alt: "Pondicherry Promenade" },
   { src: kodaikanal02, alt: "Kodaikanal Valley View" },
 ];
@@ -212,8 +241,38 @@ function getFirstDayOfMonth(year, month) {
 export default function Hero({ onSearch }) {
   const navigate = useNavigate();
 
-  // Background slideshow state
+  // Background slideshow state - mount only slide 0 first to protect LCP, then progressive load
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [loadedIndices, setLoadedIndices] = useState(() => new Set([0]));
+
+  useEffect(() => {
+    const deferLoad = () => {
+      setLoadedIndices((current) => {
+        const next = new Set(current);
+        next.add(1);
+        return next;
+      });
+    };
+    if (typeof window !== "undefined") {
+      if ("requestIdleCallback" in window) {
+        const id = requestIdleCallback(deferLoad, { timeout: 5000 });
+        return () => cancelIdleCallback(id);
+      } else {
+        const timer = setTimeout(deferLoad, 4500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
+
+  const handleSelectSlide = (idx) => {
+    setCurrentImageIndex(idx);
+    setLoadedIndices((current) => {
+      const updated = new Set(current);
+      updated.add(idx);
+      updated.add((idx + 1) % HERO_IMAGES.length);
+      return updated;
+    });
+  };
 
   // Search state
   const [selectedLocation, setSelectedLocation] = useState("");
@@ -239,10 +298,19 @@ export default function Hero({ onSearch }) {
 
   const containerRef = useRef(null);
 
-  // Rotate hero background images automatically
+  // Rotate hero background images automatically with progressive preloading
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+      setCurrentImageIndex((prev) => {
+        const next = (prev + 1) % HERO_IMAGES.length;
+        setLoadedIndices((current) => {
+          const updated = new Set(current);
+          updated.add(next);
+          updated.add((next + 1) % HERO_IMAGES.length);
+          return updated;
+        });
+        return next;
+      });
     }, 6000);
     return () => clearInterval(timer);
   }, []);
@@ -412,25 +480,38 @@ export default function Hero({ onSearch }) {
             const isCheckOut = dateStr === checkOutDate;
             const isInRange = checkInDate && checkOutDate && dateStr > checkInDate && dateStr < checkOutDate;
 
-            let btnClass = "h-8 w-8 mx-auto flex items-center justify-center rounded-full transition-all text-xs ";
+            // SQUARE SELECTED DESIGN (rounded-md, distinct edges, gold fill, NOT circular)
+            let btnClass = "relative z-10 h-8 w-8 mx-auto flex items-center justify-center transition-all text-xs font-semibold ";
 
             if (isCheckIn || isCheckOut) {
-              btnClass += "bg-[#D7A441] text-black font-bold shadow-[0_0_12px_rgba(215,164,65,0.6)]";
+              btnClass += "rounded-md bg-[#D7A441] text-neutral-950 font-bold shadow-[0_2px_12px_rgba(215,164,65,0.7)] ring-1 ring-white/40";
             } else if (isInRange) {
-              btnClass += "bg-[#D7A441]/25 text-[#F5C869] font-medium rounded-none w-full";
+              btnClass += "rounded-none w-full bg-[#D7A441]/25 text-[#F5C869] font-medium";
             } else if (isPast) {
-              btnClass += "text-white/20 cursor-not-allowed";
+              btnClass += "rounded-md text-white/20 cursor-not-allowed";
             } else {
-              btnClass += "text-white/90 hover:bg-white/10 hover:text-white cursor-pointer";
+              btnClass += "rounded-md text-white/90 hover:bg-white/15 hover:text-white cursor-pointer";
             }
 
             return (
-              <div key={dateStr} className="flex items-center justify-center">
+              <div key={dateStr} className="relative flex items-center justify-center h-8">
+                {/* Connecting range track between Check-in and Check-out */}
+                {isCheckIn && checkOutDate && (
+                  <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-[#D7A441]/20 pointer-events-none" />
+                )}
+                {isCheckOut && checkInDate && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-[#D7A441]/20 pointer-events-none" />
+                )}
+                {isInRange && (
+                  <div className="absolute inset-0 bg-[#D7A441]/20 pointer-events-none" />
+                )}
+
                 <button
                   type="button"
                   disabled={isPast}
                   onClick={() => handleDateClick(dateStr)}
                   className={btnClass}
+                  aria-label={dateStr}
                 >
                   {dayNum}
                 </button>
@@ -446,23 +527,39 @@ export default function Hero({ onSearch }) {
     <section className="relative w-full min-h-[100dvh] lg:h-screen lg:min-h-[720px] flex flex-col justify-center overflow-visible pt-20 pb-12 sm:pt-24 sm:pb-16 lg:py-0">
 
       {/* =====================================================
-          BACKGROUND SLIDESHOW (FULL SCREEN FIT)
+          BACKGROUND SLIDESHOW (FULL SCREEN FIT, HIGH PERFORMANCE)
       ===================================================== */}
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        {HERO_IMAGES.map((img, index) => (
-          <div
-            key={index}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-              index === currentImageIndex ? "opacity-100 scale-100" : "opacity-0 scale-105"
-            } transition-transform duration-[6000ms]`}
-          >
-            <img
-              src={img.src}
-              alt={img.alt}
-              className="h-full w-full object-cover object-center"
-            />
-          </div>
-        ))}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        {HERO_IMAGES.map((img, index) => {
+          const isCurrent = index === currentImageIndex;
+          const isLoaded = loadedIndices.has(index);
+
+          // Progressive mount: only render mounted/preloaded slides to save GPU memory and network bandwidth
+          if (!isLoaded) return null;
+
+          return (
+            <div
+              key={index}
+              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out transform-gpu will-change-[opacity,transform] ${
+                isCurrent ? "opacity-100 scale-100" : "opacity-0 scale-105"
+              } transition-transform duration-[6000ms]`}
+              style={{ backfaceVisibility: "hidden" }}
+            >
+              <img
+                src={img.src}
+                srcSet={img.srcSet}
+                sizes="100vw"
+                alt={img.alt}
+                width={1672}
+                height={941}
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchPriority={index === 0 ? "high" : "low"}
+                decoding="async"
+                className="h-full w-full object-cover object-center transform-gpu"
+              />
+            </div>
+          );
+        })}
 
         {/* Subtle Ambient Overlay so beach/sky and text remain crystal clear */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30 pointer-events-none" />
@@ -498,14 +595,18 @@ export default function Hero({ onSearch }) {
             <button
               key={idx}
               type="button"
-              onClick={() => setCurrentImageIndex(idx)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                idx === currentImageIndex
-                  ? "w-6 bg-[#D7A441]"
-                  : "w-1.5 bg-white/40 hover:bg-white/70"
-              }`}
+              onClick={() => handleSelectSlide(idx)}
+              className="relative flex items-center justify-center min-w-[24px] min-h-[24px] p-3 -m-1.5 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D7A441]"
               aria-label={`Slide ${idx + 1}`}
-            />
+            >
+              <span
+                className={`h-1.5 rounded-full transition-all duration-300 pointer-events-none ${
+                  idx === currentImageIndex
+                    ? "w-6 bg-[#D7A441]"
+                    : "w-1.5 bg-white/40 hover:bg-white/70"
+                }`}
+              />
+            </button>
           ))}
         </div>
 

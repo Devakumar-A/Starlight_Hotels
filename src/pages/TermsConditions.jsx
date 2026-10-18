@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowUp,
   Check,
   ChevronRight,
@@ -19,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import starLogo from "../assets/brand/starlight-favicon.png";
 import Footer from "../components/layout/Footer";
 
@@ -61,6 +62,15 @@ export default function TermsConditions() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleGoBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
 
   // Scroll to top upon opening or route changes
   useEffect(() => {
@@ -425,6 +435,18 @@ export default function TermsConditions() {
 
         <div className="relative mx-auto max-w-[1400px] w-full px-4 sm:px-6 lg:px-12 py-7 sm:py-12 lg:py-16">
           <div className="max-w-3xl">
+            {/* Back Button */}
+            <button
+              type="button"
+              onClick={handleGoBack}
+              aria-label="Go back"
+              title="Go back"
+              className="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 hover:border-[#D7A441]/60 text-white/80 hover:text-white px-3.5 py-1.5 text-xs sm:text-sm font-medium backdrop-blur-md transition-all active:scale-95 cursor-pointer mb-5"
+            >
+              <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1 text-[#D7A441]" />
+              <span>Back</span>
+            </button>
+
             <h1 className="text-2xl sm:text-4xl lg:text-5xl font-serif font-normal text-white tracking-tight leading-[1.2] break-words">
               Terms &amp; Conditions
             </h1>
@@ -1127,18 +1149,18 @@ export default function TermsConditions() {
 
               <div className="space-y-3 sm:space-y-4 text-[13px] sm:text-[14px] md:text-[14.5px] leading-[1.7] sm:leading-[1.8] text-neutral-700 font-normal break-words [overflow-wrap:anywhere] min-w-0">
                 <p>
-                  Starlight Hotels maintains specific booking, timing, and operational eligibility criteria for guest administration:
+                  Starlight Hotels maintains specific booking, timing, and operational eligibility criteria for guest administration. <strong>Please note that this local guest policy is applicable to all Starlight Hotels and villa properties situated in Puducherry (Pondicherry):</strong>
                 </p>
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 sm:p-5 min-w-0">
                   <p className="font-semibold text-neutral-900 mb-2.5 text-xs sm:text-sm">
-                    Bookings involving local guests from the following locations are subject to specific check-in and check-out timing conditions:
+                    For bookings at Starlight Hotels and villas in Puducherry, guests residing in or arriving from the following surrounding local jurisdictions are subject to specific check-in and check-out timing conditions:
                   </p>
                   <ul className="list-disc pl-4 sm:pl-5 space-y-1 text-neutral-800 font-medium text-xs sm:text-sm mb-3">
+                    <li>Pondicherry / Puducherry</li>
                     <li>Cuddalore</li>
                     <li>Marakkanam</li>
                     <li>Tindivanam</li>
-                    <li>Pondicherry / Puducherry</li>
                     <li>Villupuram</li>
                   </ul>
 
@@ -1146,7 +1168,7 @@ export default function TermsConditions() {
                     <p className="flex items-start gap-2">
                       <Clock size={14} className="text-[#9B111E] shrink-0 mt-0.5" />
                       <span>
-                        <strong>Check-In Restriction:</strong> Check-in is <strong>not permitted after 6:00 PM</strong> for bookings involving guests from these locations.
+                        <strong>Check-In Restriction:</strong> Check-in is <strong>not permitted after 6:00 PM</strong> for bookings involving guests from these locations at Puducherry properties.
                       </span>
                     </p>
                     <p className="flex items-start gap-2">
@@ -1159,7 +1181,7 @@ export default function TermsConditions() {
                 </div>
 
                 <p>
-                  This condition is strictly a hotel booking eligibility and timing policy established for front-desk security and operational procedures. It is not a statement regarding the character, rights, or integrity of individuals from these areas.
+                  This condition is strictly a local hospitality eligibility and timing policy established for front-desk security, inventory management, and operational procedures across our Puducherry villas and hotels. It is not a statement regarding the character, rights, or integrity of individuals from these areas.
                 </p>
 
                 <p>
@@ -2110,7 +2132,7 @@ export default function TermsConditions() {
       {/* Floating Action Buttons (Right, Screen Only) */}
       <aside
         aria-label="Quick contact and navigation"
-        className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-center gap-2.5 sm:gap-3 print-hide"
+        className="fixed bottom-7 right-4 sm:bottom-9 sm:right-6 z-40 flex flex-col items-center gap-2.5 sm:gap-3 print-hide"
       >
         {showBackToTop && (
           <button

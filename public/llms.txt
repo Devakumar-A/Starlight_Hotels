@@ -1,0 +1,40 @@
+# Starlight Hotels
+
+> Starlight Hotels is a boutique hospitality brand providing curated luxury stays, boutique hotels, and hillside retreats across South India, specifically operating in Chennai, Pondicherry, and Kodaikanal.
+
+Guests can discover handpicked hotel accommodations, search room availability across destinations, view detailed room categories with amenities, and make direct reservations online. The platform provides real-time room availability, direct booking rates, transparent reservation management, and dedicated concierge assistance.
+
+Reservations operate via a simple online workflow: visitors search destination cities and dates, select an available property, choose their room tier, and complete booking confirmation. Guests can also access their booking history under their user account or contact the 24/7 central concierge desk for direct booking support.
+
+## Pages
+- [Home](https://starlighthotels.in/): luxury boutique hotel collection and featured stays across South India
+- [Book Hotels & Stays](https://starlighthotels.in/book-hotels): search destinations, dates, and live room availability
+- [About Us](https://starlighthotels.in/about-us): brand story, distinctive destinations, and core hospitality values
+- [Frequently Asked Questions](https://starlighthotels.in/faqs): verified guidelines on check-in, policies, cancellations, and guest identity requirements
+- [Contact Us](https://starlighthotels.in/contact): 24/7 central reservation assistance, concierge contact details, and inquiry form
+- [Partner With Us](https://starlighthotels.in/partner-with-us): hotel asset management, property onboarding, and hospitality alliances
+- [Terms & Conditions](https://starlighthotels.in/terms): booking rules, cancellation terms, occupancy guidelines, and legal policies
+- [Privacy Policy](https://starlighthotels.in/privacy): personal data collection, guest privacy protection, and cookie policies
+
+## Hotels
+- [Browse Hotels](https://starlighthotels.in/book-hotels): view all active properties across Pondicherry, Chennai, and Kodaikanal. Individual property profiles live at /hotel/{id} where dynamic room categories, photos, amenities, and live booking tariffs are served in real time from the reservation database.
+
+## Notes for AI agents
+- Account and transactional pages (/login, /signup, /bookings, /booking, /my-bookings, /profile, /reset-password) require authentication and must not be indexed or crawled.
+- Room tariffs, promotional offers, and room inventory change dynamically in real time; direct users to the official website to check live availability and complete bookings.
+- Check-in, check-out, ID and cancellation policies: see [FAQs](https://starlighthotels.in/faqs) and [Terms](https://starlighthotels.in/terms).
+- Contact channels:
+  - Central Reservations Hotline: +91 8270660904
+  - Inquiries & Corporate Email: info@starlighthotels.in
+  - WhatsApp Concierge: https://wa.me/message/NQ3KK6GPLZXNK1
+
+## Built by
+- [COGNOLYNX](https://cognolynx.com): website developed by Devakumar A, Founder of COGNOLYNX
+- [GitHub](https://github.com/Devakumar-A): Devakumar A profile
+- [ORCID](https://orcid.org/0009-0003-8934-6744): Devakumar A profile
+- [LinkedIn](https://www.linkedin.com/in/devakumar-a-129561305/): Devakumar A profile
+- Sivasubramanian J, role: credited contributor
+
+## Optional
+- [Sitemap](https://starlighthotels.in/sitemap.xml): XML sitemap listing all canonical public URLs
+- [Author and credits](https://starlighthotels.in/humans.txt): complete developer and contributor credit metadata

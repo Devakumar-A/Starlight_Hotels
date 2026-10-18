@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   Building2,
@@ -17,6 +18,7 @@ import {
 import Footer from "../components/Footer";
 
 export default function PartnerWithUs() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     partnerName: "",
     propertyName: "",
@@ -29,6 +31,14 @@ export default function PartnerWithUs() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handleGoBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -55,6 +65,20 @@ export default function PartnerWithUs() {
         {/* HERO */}
         <section className="relative border-b border-white/10 px-4 pt-28 pb-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
+            {/* Back Button */}
+            <div className="mb-5 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleGoBack}
+                aria-label="Go back"
+                title="Go back"
+                className="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 hover:border-[#D7A441]/60 text-white/80 hover:text-white px-3.5 py-1.5 text-xs sm:text-sm font-medium backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+              >
+                <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1 text-[#D7A441]" />
+                <span>Back</span>
+              </button>
+            </div>
+
             {/* Breadcrumb */}
             <div className="mb-4 flex items-center justify-center gap-2 text-xs font-medium text-white/50">
               <Link to="/" className="hover:text-[#D7A441] transition-colors">

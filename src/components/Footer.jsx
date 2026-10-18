@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import starLogo from "../assets/brand/starlight-favicon.png";
+import starLogo from "../assets/brand/starlight-favicon-90.webp";
+import { resetConsent } from "../lib/consent";
 
 // ============================================================
 // EXPLORE STARLIGHT HOTELS DIRECTORY DATA
@@ -184,14 +185,15 @@ export default function Footer() {
         <div className="flex flex-col items-start justify-between gap-6 pb-12 border-b border-white/10 md:flex-row md:items-center">
           <a
             href="/"
-            aria-label="Starlight Hotels"
             className="group flex items-center gap-3.5"
           >
             <div className="flex items-center justify-center">
               <img
                 src={starLogo}
-                alt="Starlight Hotels"
+                alt=""
                 draggable="false"
+                width={40}
+                height={40}
                 className="h-9 w-9 object-contain sm:h-10 sm:w-10 transition-transform duration-500 group-hover:rotate-12"
               />
             </div>
@@ -200,7 +202,7 @@ export default function Footer() {
               <span className="text-base sm:text-lg font-semibold tracking-[0.22em] text-white uppercase font-sans">
                 STARLIGHT <span className="text-[#D7A441] font-bold">HOTELS</span>
               </span>
-              <span className="text-[9px] font-semibold tracking-[0.3em] text-white/50 uppercase">
+              <span className="text-[9px] font-semibold tracking-[0.3em] text-white/70 uppercase">
                 LUXURY STAYS &amp; RESORTS
               </span>
             </div>
@@ -210,7 +212,7 @@ export default function Footer() {
             <p className="text-sm font-medium text-white/90">
               Thoughtful stays. Memorable journeys.
             </p>
-            <p className="mt-1 text-xs text-white/50">
+            <p className="mt-1 text-xs text-white/70">
               Discover distinctive hotels and villas across South India.
             </p>
           </div>
@@ -229,7 +231,7 @@ export default function Footer() {
                 EXPLORE STARLIGHT HOTELS
               </h2>
             </div>
-            <p className="text-xs text-white/50 tracking-wide">
+            <p className="text-xs text-white/70 tracking-wide">
               Discover Starlight Hotels across South India
             </p>
           </div>
@@ -256,7 +258,7 @@ export default function Footer() {
                           {item.name}
                         </span>
                       )}
-                      <p className="mt-0.5 text-xs text-white/45 tracking-normal">
+                      <p className="mt-0.5 text-xs text-white/70 tracking-normal">
                         {item.area}
                       </p>
                     </div>
@@ -312,7 +314,7 @@ export default function Footer() {
                                 {item.name}
                               </span>
                             )}
-                            <p className="mt-0.5 text-xs text-white/45">
+                            <p className="mt-0.5 text-xs text-white/70">
                               {item.area}
                             </p>
                           </div>
@@ -451,7 +453,7 @@ export default function Footer() {
 
             <div className="mt-5 space-y-4 text-sm">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">
                   Call to Book
                 </p>
                 <a
@@ -464,7 +466,7 @@ export default function Footer() {
               </div>
 
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">
                   Email / Enquiry
                 </p>
                 <a
@@ -477,12 +479,12 @@ export default function Footer() {
               </div>
 
               <div className="pt-2">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-white/70 mb-2.5">
                   Follow Starlight
                 </p>
                 <div className="flex items-center gap-3">
                   <a
-                    href="https://www.instagram.com/starlight.hotels_/"
+                    href="https://www.instagram.com/___starlight.hotels___?srtk=N3Y2cDNzbHA3ZWxx"
                     target="_blank"
                     rel="noreferrer"
                     aria-label="Instagram"
@@ -549,25 +551,50 @@ export default function Footer() {
         </div>
 
         {/* ============================================================
-            BOTTOM BAR: COPYRIGHT & LEGAL
+            BOTTOM BAR: BUSINESS DETAILS, COPYRIGHT & LEGAL
         ============================================================ */}
-        <div className="flex flex-col items-center justify-between gap-4 pt-8 border-t border-white/10 sm:flex-row text-xs text-white/50">
-          <p>© {new Date().getFullYear()} Starlight Hotels. All Rights Reserved.</p>
+        <div className="pt-8 border-t border-white/10 space-y-4 text-xs text-white/70">
+          {/* Verified Business Details */}
+          <div className="flex flex-col gap-1.5 text-center sm:text-left text-[11px] sm:text-xs leading-relaxed text-white/75">
+            <p className="font-medium text-white/90">
+              Ilavarasan (Proprietor), trading as Starlight Hotels
+            </p>
+            <p>
+              No. 50, Lenin Street, Kosapalayam, Puducherry - 605013
+            </p>
+            <p className="text-white/65">
+              <span>GSTIN: 34AAYPI7697D2Z0</span>
+              <span className="mx-2 text-white/30">|</span>
+              <span>Udyam Reg. No.: UDYAM-PY-03-0011700</span>
+            </p>
+          </div>
 
-          <div className="flex items-center gap-6">
-            <Link
-              to="/privacy"
-              className="transition hover:text-white"
-            >
-              Privacy Policy
-            </Link>
-            <span className="h-3 w-px bg-white/20" />
-            <Link
-              to="/terms"
-              className="transition hover:text-white"
-            >
-              Terms &amp; Conditions
-            </Link>
+          <div className="flex flex-col items-center justify-between gap-4 pt-4 border-t border-white/5 sm:flex-row">
+            <p>© {new Date().getFullYear()} Starlight Hotels. All Rights Reserved.</p>
+
+            <div className="flex items-center gap-4 sm:gap-6 flex-wrap justify-center sm:justify-end">
+              <button
+                type="button"
+                onClick={resetConsent}
+                className="transition hover:text-white underline-offset-4 hover:underline cursor-pointer bg-transparent border-none p-0 text-xs text-white/70"
+              >
+                Cookie settings
+              </button>
+              <span className="h-3 w-px bg-white/20" />
+              <Link
+                to="/privacy"
+                className="transition hover:text-white"
+              >
+                Privacy Policy
+              </Link>
+              <span className="h-3 w-px bg-white/20" />
+              <Link
+                to="/terms"
+                className="transition hover:text-white"
+              >
+                Terms &amp; Conditions
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -598,16 +625,15 @@ export default function Footer() {
               #F5CE74 95%,
               #B88428 100%
             );
-            background-size: 200% 100%;
+            background-size: 100% 100%;
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             color: transparent;
-            animation: runGoldGradient 6s linear infinite;
             transform: translateY(50px);
             opacity: 0;
             transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
-            will-change: transform, opacity, background-position;
+            will-change: transform, opacity;
           }
 
           .footer-brand-sub {
@@ -622,16 +648,15 @@ export default function Footer() {
               #FFF2CD 92%,
               #9C6B1C 100%
             );
-            background-size: 200% 100%;
+            background-size: 100% 100%;
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             color: transparent;
-            animation: runGoldGradient 7s linear infinite;
             transform: translateY(40px);
             opacity: 0;
             transition: transform 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.15s, opacity 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
-            will-change: transform, opacity, background-position;
+            will-change: transform, opacity;
           }
 
           .footer-rise-container.is-visible .footer-brand-title,
