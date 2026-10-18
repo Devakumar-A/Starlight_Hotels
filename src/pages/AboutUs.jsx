@@ -1,7 +1,8 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import {
+  ArrowLeft,
   ArrowRight,
   MapPin,
   Sparkles,
@@ -90,6 +91,7 @@ const pillars = [
 ];
 
 function AboutUs() {
+  const navigate = useNavigate();
   return (
     <main className="min-h-screen bg-white text-[#171717] overflow-x-clip">
 
@@ -106,6 +108,24 @@ function AboutUs() {
             variants={staggerContainer}
             className="max-w-4xl"
           >
+            <motion.div variants={fadeUp} className="mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.history.state && window.history.state.idx > 0) {
+                    navigate(-1);
+                  } else {
+                    navigate("/");
+                  }
+                }}
+                aria-label="Go back"
+                title="Go back"
+                className="group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 hover:border-[#D7A441] text-white/90 hover:text-white px-3.5 py-1.5 text-xs sm:text-sm font-medium backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+              >
+                <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1 text-[#D7A441]" />
+                <span>Back</span>
+              </button>
+            </motion.div>
             <motion.div
               variants={fadeUp}
               className="mb-6 flex items-center gap-3"

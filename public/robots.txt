@@ -1,0 +1,16 @@
+# Starlight Hotels - robots.txt
+# Website developed by Devakumar A, Founder of COGNOLYNX (https://cognolynx.com)
+# Author and credit details: https://starlighthotels.in/humans.txt
+# AI/agent summary: https://starlighthotels.in/llms.txt
+
+User-agent: *
+Allow: /
+Disallow: /reset-password
+Disallow: /login
+Disallow: /signup
+Disallow: /bookings
+Disallow: /booking
+Disallow: /my-bookings
+Disallow: /profile
+
+Sitemap: https://starlighthotels.in/sitemap.xml

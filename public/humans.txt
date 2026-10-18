@@ -1,0 +1,17 @@
+/* TEAM */
+Developer: Devakumar A
+Role: Founder, COGNOLYNX
+Company site: https://cognolynx.com
+GitHub: https://github.com/Devakumar-A
+ORCID: https://orcid.org/0009-0003-8934-6744
+LinkedIn: https://www.linkedin.com/in/devakumar-a-129561305/
+Contact: devak9391@gmail.com
+
+Credit: Sivasubramanian J
+Role: credited contributor
+
+/* SITE */
+Name: Starlight Hotels
+Language: English
+Standards: HTML5, CSS3, React, Vite, Tailwind CSS
+Last update: 2026/10/18

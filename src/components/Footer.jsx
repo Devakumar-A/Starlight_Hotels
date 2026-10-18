@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import starLogo from "../assets/brand/starlight-favicon.png";
+import starLogo from "../assets/brand/starlight-favicon-90.webp";
 
 // ============================================================
 // EXPLORE STARLIGHT HOTELS DIRECTORY DATA
@@ -184,14 +184,15 @@ export default function Footer() {
         <div className="flex flex-col items-start justify-between gap-6 pb-12 border-b border-white/10 md:flex-row md:items-center">
           <a
             href="/"
-            aria-label="Starlight Hotels"
             className="group flex items-center gap-3.5"
           >
             <div className="flex items-center justify-center">
               <img
                 src={starLogo}
-                alt="Starlight Hotels"
+                alt=""
                 draggable="false"
+                width={40}
+                height={40}
                 className="h-9 w-9 object-contain sm:h-10 sm:w-10 transition-transform duration-500 group-hover:rotate-12"
               />
             </div>
@@ -256,7 +257,7 @@ export default function Footer() {
                           {item.name}
                         </span>
                       )}
-                      <p className="mt-0.5 text-xs text-white/45 tracking-normal">
+                      <p className="mt-0.5 text-xs text-white/70 tracking-normal">
                         {item.area}
                       </p>
                     </div>
@@ -312,7 +313,7 @@ export default function Footer() {
                                 {item.name}
                               </span>
                             )}
-                            <p className="mt-0.5 text-xs text-white/45">
+                            <p className="mt-0.5 text-xs text-white/70">
                               {item.area}
                             </p>
                           </div>
@@ -451,7 +452,7 @@ export default function Footer() {
 
             <div className="mt-5 space-y-4 text-sm">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">
                   Call to Book
                 </p>
                 <a
@@ -464,7 +465,7 @@ export default function Footer() {
               </div>
 
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">
                   Email / Enquiry
                 </p>
                 <a
@@ -477,7 +478,7 @@ export default function Footer() {
               </div>
 
               <div className="pt-2">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-white/70 mb-2.5">
                   Follow Starlight
                 </p>
                 <div className="flex items-center gap-3">
@@ -598,16 +599,15 @@ export default function Footer() {
               #F5CE74 95%,
               #B88428 100%
             );
-            background-size: 200% 100%;
+            background-size: 100% 100%;
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             color: transparent;
-            animation: runGoldGradient 6s linear infinite;
             transform: translateY(50px);
             opacity: 0;
             transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
-            will-change: transform, opacity, background-position;
+            will-change: transform, opacity;
           }
 
           .footer-brand-sub {
@@ -622,16 +622,15 @@ export default function Footer() {
               #FFF2CD 92%,
               #9C6B1C 100%
             );
-            background-size: 200% 100%;
+            background-size: 100% 100%;
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             color: transparent;
-            animation: runGoldGradient 7s linear infinite;
             transform: translateY(40px);
             opacity: 0;
             transition: transform 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.15s, opacity 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
-            will-change: transform, opacity, background-position;
+            will-change: transform, opacity;
           }
 
           .footer-rise-container.is-visible .footer-brand-title,

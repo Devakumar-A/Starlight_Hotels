@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   AirVent,
   ArrowUpDown,
   BatteryCharging,
@@ -16,20 +17,22 @@ import {
   Clock,
   Cctv,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Coffee,
+  CreditCard,
   DoorOpen,
-  HelpCircle,
+  FileText,
   Info,
   Lock,
   Mail,
   MapPin,
   Minus,
+  Percent,
   Phone,
   Plus,
   Refrigerator,
-  Shield,
   ShieldCheck,
   ShieldUser,
   Shirt,
@@ -58,29 +61,6 @@ import { supabase } from "../lib/supabase";
 import AuthModal from "../components/AuthModal";
 import Footer from "../components/Footer";
 
-// Deterministic proprietary Starlight Guest Rating (4.5 to 5.0)
-function getStarlightRating(id) {
-  if (!id) return { score: "4.8", label: "Superb", reviews: 142 };
-
-  let hash = 0;
-  const str = String(id);
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const absHash = Math.abs(hash);
-  const scorePresets = [4.7, 4.8, 4.9, 4.6, 4.8, 5.0, 4.7, 4.9, 4.8, 4.6];
-  const score = scorePresets[absHash % scorePresets.length].toFixed(1);
-  const reviews = 68 + (absHash % 160);
-  const label =
-    Number(score) >= 4.9
-      ? "Exceptional"
-      : Number(score) >= 4.7
-        ? "Superb"
-        : "Excellent";
-
-  return { score, label, reviews };
-}
 
 function getTomorrowDate() {
   const d = new Date();
@@ -130,6 +110,27 @@ function getAmenityIcon(iconKey) {
   return amenityIcons[iconKey] || CheckCircle2;
 }
 
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function getFirstDayOfMonth(year, month) {
+  const day = new Date(year, month, 1).getDay();
+  return day === 0 ? 6 : day - 1;
+}
+
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return "Select date";
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length !== 3) return dateStr;
+  const date = new Date(parts[0], parts[1] - 1, parts[2]);
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 function Bookings() {
   const { hotelId: paramHotelId } = useParams();
   const [searchParams] = useSearchParams();
@@ -162,7 +163,6 @@ function Bookings() {
   const [occupancyLoading, setOccupancyLoading] = useState(false);
   const [occupancyError, setOccupancyError] = useState("");
 
-  const [pricing, setPricing] = useState([]);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState("");
 
@@ -176,9 +176,6 @@ function Bookings() {
   const [error, setError] = useState("");
   const [availabilityError, setAvailabilityError] =
     useState("");
-
-  const [amenitiesOpen, setAmenitiesOpen] = useState(false);
-  const [reviewsOpen, setReviewsOpen] = useState(false);
   const [amenities, setAmenities] = useState([]);
   const [showAllAmenities, setShowAllAmenities] = useState(false);
 
@@ -193,6 +190,158 @@ function Bookings() {
   const [hotelImage, setHotelImage] = useState(null);
 
   const navigate = useNavigate();
+
+  const [activeDropdown, setActiveDropdown] = useState(null); // null | 'calendar' | 'guests'
+  const [calendarTarget, setCalendarTarget] = useState("checkIn"); // 'checkIn' | 'checkOut'
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
+
+  const calendarContainerRef = useRef(null);
+  const guestsDropdownRef = useRef(null);
+
+  // Click outside listener for custom calendar & guests dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      const isInsideCalendar =
+        calendarContainerRef.current && calendarContainerRef.current.contains(event.target);
+      const isInsideGuests =
+        guestsDropdownRef.current && guestsDropdownRef.current.contains(event.target);
+      if (!isInsideCalendar && !isInsideGuests) {
+        setActiveDropdown(null);
+      }
+    }
+    if (activeDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [activeDropdown]);
+
+  // Calendar calculations
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const month1Date = new Date(today.getFullYear(), today.getMonth() + calendarMonthOffset, 1);
+  const month2Date = new Date(today.getFullYear(), today.getMonth() + calendarMonthOffset + 1, 1);
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const handleCalendarDateClick = (dateStr) => {
+    if (calendarTarget === "checkIn") {
+      setSelectedCheckIn(dateStr);
+      if (selectedCheckOut && dateStr >= selectedCheckOut) {
+        setSelectedCheckOut("");
+      }
+      setCalendarTarget("checkOut");
+    } else {
+      if (!selectedCheckIn || dateStr <= selectedCheckIn) {
+        setSelectedCheckIn(dateStr);
+        setSelectedCheckOut("");
+        setCalendarTarget("checkOut");
+      } else {
+        setSelectedCheckOut(dateStr);
+        setActiveDropdown(null);
+      }
+    }
+  };
+
+  const renderMonthCalendar = (viewDate, isMobile = false) => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+
+    const days = [];
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dStr = String(d).padStart(2, "0");
+      const mStr = String(month + 1).padStart(2, "0");
+      days.push(`${year}-${mStr}-${dStr}`);
+    }
+
+    return (
+      <div className={isMobile ? "w-full max-w-[280px] mx-auto" : "w-full sm:w-[260px]"}>
+        <h5 className="text-center font-semibold text-white text-xs sm:text-sm mb-3">
+          {monthNames[month]} {year}
+        </h5>
+
+        {/* Days of week header */}
+        <div className="grid grid-cols-7 text-center text-[11px] font-medium text-white/50 mb-2">
+          <span>Mon</span>
+          <span>Tue</span>
+          <span>Wed</span>
+          <span>Thu</span>
+          <span>Fri</span>
+          <span className="text-[#D7A441]">Sat</span>
+          <span className="text-[#D7A441]">Sun</span>
+        </div>
+
+        {/* Days grid */}
+        <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
+          {days.map((dateStr, idx) => {
+            if (!dateStr) {
+              return <div key={`empty-${idx}`} className="h-8" />;
+            }
+
+            const dayNum = parseInt(dateStr.split("-")[2], 10);
+            const isPast = dateStr < todayStr;
+            const isCheckIn = dateStr === selectedCheckIn;
+            const isCheckOut = dateStr === selectedCheckOut;
+            const isInRange =
+              selectedCheckIn &&
+              selectedCheckOut &&
+              dateStr > selectedCheckIn &&
+              dateStr < selectedCheckOut;
+
+            // SQUARE SELECTED DESIGN (rounded-md, distinct edges, gold fill, NOT circular)
+            let btnClass = "relative z-10 h-8 w-8 mx-auto flex items-center justify-center transition-all text-xs font-semibold ";
+
+            if (isCheckIn || isCheckOut) {
+              btnClass += "rounded-md bg-[#D7A441] text-neutral-950 font-bold shadow-[0_2px_12px_rgba(215,164,65,0.7)] ring-1 ring-white/40";
+            } else if (isInRange) {
+              btnClass += "rounded-none w-full bg-[#D7A441]/25 text-[#F5C869] font-medium";
+            } else if (isPast) {
+              btnClass += "rounded-md text-white/20 cursor-not-allowed";
+            } else {
+              btnClass += "rounded-md text-white/90 hover:bg-white/15 hover:text-white cursor-pointer";
+            }
+
+            return (
+              <div
+                key={dateStr}
+                className="relative flex items-center justify-center h-8"
+              >
+                {/* Connecting range track between Check-in and Check-out */}
+                {isCheckIn && selectedCheckOut && (
+                  <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-[#D7A441]/20 pointer-events-none" />
+                )}
+                {isCheckOut && selectedCheckIn && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-[#D7A441]/20 pointer-events-none" />
+                )}
+                {isInRange && (
+                  <div className="absolute inset-0 bg-[#D7A441]/20 pointer-events-none" />
+                )}
+
+                <button
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => handleCalendarDateClick(dateStr)}
+                  className={btnClass}
+                  aria-label={dateStr}
+                >
+                  {dayNum}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   // Primary Guest Details
   const [guestName, setGuestName] = useState("");
@@ -348,28 +497,47 @@ function Bookings() {
         if (error) throw error;
 
         if (!data) {
-          throw new Error(
-            "Occupancy limits are not configured for this room category."
-          );
+          const maxOcc = Number(category?.max_occupancy) || 3;
+          if (!cancelled) {
+            setOccupancy({ minimum: 1, preferred: Math.min(2, maxOcc), maximum: maxOcc });
+            setOccupancyError("");
+            setGuests((curr) => {
+              const minG = 1 * rooms;
+              const maxG = maxOcc * rooms;
+              return Math.min(maxG, Math.max(minG, curr || 1));
+            });
+          }
+          return;
         }
 
-        const minimum = Number(data.minimum_accommodation);
-        const preferred = Number(data.preferred_accommodation);
-        const maximum = Number(data.maximum_accommodation);
+        let minimum = Number(data.minimum_accommodation);
+        let preferred = Number(data.preferred_accommodation);
+        let maximum = Number(data.maximum_accommodation);
 
+        const fallbackMin = Number(category?.min_occupancy) || 1;
+        const fallbackMax = Number(category?.max_occupancy) || 3;
+
+        if (!Number.isInteger(minimum) || minimum < 1) {
+          minimum = fallbackMin;
+        }
+        if (!Number.isInteger(maximum) || maximum < minimum) {
+          maximum = Math.max(minimum, fallbackMax);
+        }
         if (
-          !Number.isInteger(minimum) ||
           !Number.isInteger(preferred) ||
-          !Number.isInteger(maximum) ||
-          minimum < 1 ||
-          minimum > preferred ||
+          preferred < minimum ||
           preferred > maximum
         ) {
-          throw new Error("Invalid room occupancy configuration.");
+          preferred = Math.min(maximum, Math.max(minimum, 2));
         }
 
         if (!cancelled) {
           setOccupancy({ minimum, preferred, maximum });
+          setGuests((curr) => {
+            const minG = minimum * rooms;
+            const maxG = maximum * rooms;
+            return Math.min(maxG, Math.max(minG, curr || minimum));
+          });
         }
       } catch (error) {
         if (!cancelled) {
@@ -390,7 +558,7 @@ function Bookings() {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, category]);
 
 
   // --------------------------------------------------
@@ -462,6 +630,44 @@ function Bookings() {
         if (!cancelled) {
           setHotel(selectedHotel);
           setCategory(selectedCategory);
+          setAvailableCategories(categories);
+
+          try {
+            let resolvedImage = null;
+
+            // 1. Check if there is specific room category image
+            if (categoryId) {
+              const { data: catMedia } = await supabase
+                .from("media")
+                .select("cloudinary_url")
+                .eq("room_category_id", categoryId)
+                .eq("media_type", "image")
+                .order("sort_order", { ascending: true })
+                .limit(1);
+
+              if (catMedia && catMedia.length > 0 && catMedia[0].cloudinary_url) {
+                resolvedImage = catMedia[0].cloudinary_url;
+              }
+            }
+
+            // 2. Fallback to hotel primary media
+            if (!resolvedImage) {
+              const media = await getHotelMedia(hotelId);
+              const firstImage =
+                media?.find((item) => item.media_type === "image")?.cloudinary_url ||
+                media?.[0]?.cloudinary_url;
+
+              if (firstImage) {
+                resolvedImage = firstImage;
+              }
+            }
+
+            if (!cancelled && resolvedImage) {
+              setHotelImage(resolvedImage);
+            }
+          } catch (e) {
+            console.warn("Hotel media load error:", e);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -634,48 +840,8 @@ function Bookings() {
   );
 
   // --------------------------------------------------
-  // LOAD DATE-WISE ROOM PRICING
+  // LOAD PRICE SUMMARY FROM BACKEND
   // --------------------------------------------------
-
-  useEffect(() => {
-    async function loadPricing() {
-      if (
-        !categoryId ||
-        !selectedCheckIn ||
-        !selectedCheckOut ||
-        nights <= 0
-      ) {
-        setPricing([]);
-        return;
-      }
-
-      try {
-        setPricingLoading(true);
-        setPricingError("");
-
-        const result = await getRoomPricing(
-          categoryId,
-          selectedCheckIn,
-          selectedCheckOut
-        );
-
-        setPricing(result);
-      } catch (err) {
-        console.error(err);
-        setPricing([]);
-        setPricingError("Unable to load room pricing.");
-      } finally {
-        setPricingLoading(false);
-      }
-    }
-
-    loadPricing();
-  }, [
-    categoryId,
-    selectedCheckIn,
-    selectedCheckOut,
-    nights,
-  ]);
   useEffect(() => {
     let cancelled = false;
 
@@ -695,6 +861,7 @@ function Bookings() {
           checkOutDate: selectedCheckOut,
           numberOfGuests: guests,
           roomsRequested: rooms,
+          defaultPrice: Number(category?.default_price) || 0,
         });
 
         if (!cancelled) {
@@ -740,24 +907,28 @@ function Bookings() {
   const roomPrices = priceSummary?.room_prices || [];
   const guestCounts = priceSummary?.guest_counts || [];
 
-  const averagePricePerNight =
-    Number(priceSummary?.average_nightly_rate) || 0;
-
   const subtotal = Number(priceSummary?.subtotal) || 0;
   const gstAmount = Number(priceSummary?.gst_amount) || 0;
   const signInDiscount = Number(priceSummary?.sign_in_discount) || 0;
   const finalTotal = Number(priceSummary?.final_total) || 0;
 
-
   const roomTotal = finalTotal;
 
-  const minimumGuestsPerRoom = occupancy?.minimum ?? 1;
-  const preferredGuestsPerRoom = occupancy?.preferred ?? 1;
-  const maxGuestsPerRoom = occupancy?.maximum ?? 1;
+  const minimumGuestsPerRoom = occupancy?.minimum ?? (Number(category?.min_occupancy) || 1);
+  const maxGuestsPerRoom = occupancy?.maximum ?? (Number(category?.max_occupancy) || 3);
 
   const minimumGuests = minimumGuestsPerRoom * rooms;
   const maximumGuests = maxGuestsPerRoom * rooms;
 
+  const filteredRooms = availableCategories.filter((cat) => {
+    const maxOccupancy = Number(cat?.max_occupancy) || 3;
+    const minOccupancy = Number(cat?.min_occupancy) || 1;
+
+    return (
+      guests >= minOccupancy * rooms &&
+      guests <= maxOccupancy * rooms
+    );
+  });
 
   // --------------------------------------------------
   // ROOM CONTROLS
@@ -1037,164 +1208,151 @@ function Bookings() {
     );
   }
 
-  const hotelRating = getStarlightRating(hotel.id);
-
   // --------------------------------------------------
   // MAIN LUXURY BOOKING INTERFACE
   // --------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#FCFCFD] text-neutral-900 flex flex-col justify-between">
-      <main className="flex-1 pb-20">
+    <div className="min-h-screen bg-[#F8F7F4] text-neutral-900 flex flex-col justify-between selection:bg-[#D7A441]/20">
+      <main className="flex-1 pb-16">
 
         {/* =================================================
-          TOP BREADCRUMB & PROPERTY HEADER
+          TOP NAVIGATION & PROPERTY BANNER
         ================================================= */}
-        <section className="border-b border-neutral-200/70 bg-white">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <header className="border-b border-[#EAE6DF] bg-white sticky top-0 z-30 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
 
-            {/* Back button & Breadcrumbs */}
+            {/* Back Navigation & Breadcrumbs */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.history.length > 1) {
-                      window.history.back();
+                    if (window.history.state && window.history.state.idx > 0) {
+                      navigate(-1);
                     } else {
-                      window.location.href = `/book-hotels?checkIn=${encodeURIComponent(checkIn)}&checkOut=${encodeURIComponent(checkOut)}&guests=${encodeURIComponent(guests)}`;
+                      navigate(`/book-hotels?checkIn=${encodeURIComponent(checkIn)}&checkOut=${encodeURIComponent(checkOut)}&guests=${encodeURIComponent(guests)}`);
                     }
                   }}
-                  aria-label="Go back"
-                  title="Go back"
-                  className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-neutral-200/90 bg-white text-neutral-700 shadow-xs hover:border-[#D7A441] hover:text-[#B88428] hover:shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
+                  aria-label="Return to previous page"
+                  title="Return to previous page"
+                  className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-xs hover:border-[#D7A441] hover:text-[#B88428] hover:shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
                 >
-                  <ArrowLeft
-                    size={17}
-                    className="transition-transform hover:-translate-x-0.5"
-                  />
+                  <ArrowLeft size={17} className="transition-transform group-hover:-translate-x-0.5" />
                 </button>
 
-                <nav className="flex items-center gap-1.5 text-xs text-neutral-400 min-w-0">
-                  <Link to="/" className="hover:text-neutral-600 transition-colors shrink-0">Home</Link>
+                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-neutral-400 min-w-0">
+                  <Link to="/" className="hover:text-neutral-700 transition-colors shrink-0">Home</Link>
                   <span>/</span>
-                  <Link to="/book-hotels" className="hover:text-neutral-600 transition-colors shrink-0">Stays</Link>
+                  <Link to="/book-hotels" className="hover:text-neutral-700 transition-colors shrink-0">Hotels</Link>
                   <span>/</span>
-                  <span className="text-neutral-500 shrink-0">{hotel.city}</span>
+                  <span className="text-neutral-600 shrink-0">{hotel.city}</span>
                   <span>/</span>
-                  <span className="font-medium text-neutral-800 truncate max-w-[150px] sm:max-w-none">
+                  <span className="text-neutral-800 font-medium truncate max-w-[130px] sm:max-w-[200px]">
                     {hotel.hotel_name}
                   </span>
                   <span>/</span>
-                  <span className="text-[#B88428] font-semibold shrink-0">Review &amp; Book</span>
+                  <span className="text-[#B88428] font-semibold shrink-0">Reservation</span>
                 </nav>
+              </div>
+
+              {/* Security Pill */}
+              <div className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-800 bg-emerald-50/90 border border-emerald-200/80 px-2.5 py-1 rounded-full shrink-0">
+                <ShieldCheck size={13} className="text-emerald-600" />
+                <span>Verified Direct Booking</span>
               </div>
             </div>
 
-            {/* Property Title & Badges */}
-            <div className="mt-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Property Headline */}
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pt-1">
               <div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50/80 border border-amber-200/60 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#B88428]">
-                  <Sparkles size={12} className="text-[#D7A441]" />
-                  Starlight Verified Stay
-                </div>
-
-                <h1 className="mt-2 text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-neutral-900 font-serif">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#B88428]">
+                  Starlight Luxury Stays
+                </span>
+                <h1 className="mt-0.5 text-2xl sm:text-3xl font-serif font-normal tracking-tight text-neutral-900">
                   {hotel.hotel_name}
                 </h1>
-
-                <p className="mt-2 flex items-center gap-2 text-xs sm:text-sm text-neutral-500">
-                  <MapPin size={15} className="shrink-0 text-[#D7A441]" />
+                <p className="mt-1 flex items-center gap-1.5 text-xs sm:text-sm text-neutral-500">
+                  <MapPin size={14} className="shrink-0 text-[#D7A441]" />
                   <span>
                     {hotel.address ? `${hotel.address}, ` : ""}
-                    <strong className="text-neutral-700">{hotel.city}</strong>
+                    <strong className="text-neutral-700 font-medium">{hotel.city}</strong>
                   </span>
                 </p>
               </div>
-
-              {/* Starlight Guest Score Badge (MakeMyTrip / Booking.com standard) */}
-              <div className="flex items-center gap-3 rounded-2xl border border-neutral-200/80 bg-[#F9FAFB] p-3 sm:px-4 sm:py-3 self-start lg:self-auto shadow-sm">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1B1E28] text-white font-bold text-sm shadow-sm">
-                  <span className="text-[#D7A441]">{hotelRating.score}</span>
-                  <span className="text-[10px] text-amber-400 ml-0.5">★</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm font-bold text-neutral-900">
-                      {hotelRating.label}
-                    </span>
-                    <span className="rounded-md bg-emerald-50 text-[10px] font-semibold text-emerald-700 px-1.5 py-0.5 border border-emerald-200">
-                      Top 5%
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">
-                    {hotelRating.reviews} verified guest reviews
-                  </p>
-                </div>
-              </div>
             </div>
 
-          </div>
-        </section>
 
+          </div>
+        </header>
 
         {/* =================================================
-          MAIN BOOKING 2-COLUMN GRID (Booking.com / MakeMyTrip / Elivaas)
+          MAIN BOOKING WORKFLOW
         ================================================= */}
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-          <div className="grid gap-8 lg:grid-cols-[1fr_420px] items-start">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
 
-            {/* =================================================
-              LEFT COLUMN — DETAILS, AMENITIES, POLICIES & TRUST
-            ================================================= */}
-            <div className="space-y-6">
+          {/* 1. ACCOMMODATION OVERVIEW CARD */}
+          <section
+            aria-label="Selected Room Category"
+            className="rounded-2xl border border-[#EAE6DF] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-hidden"
+          >
+            <div className="flex flex-col md:flex-row items-stretch">
+              {/* Room Image */}
+              <div className="relative md:w-80 lg:w-96 shrink-0 bg-neutral-100 min-h-[200px] md:min-h-full overflow-hidden">
+                {hotelImage ? (
+                  <img
+                    src={hotelImage}
+                    alt={category.category_name}
+                    className="h-full w-full object-cover min-h-[200px] transition-transform duration-500 hover:scale-105"
+                    onError={() => setHotelImage(null)}
+                  />
+                ) : (
+                  <div className="flex h-full w-full min-h-[200px] flex-col items-center justify-center bg-[#171922] text-white p-6 text-center">
+                    <BedDouble size={36} className="text-[#D7A441] mb-2 stroke-1" />
+                    <p className="text-sm font-serif font-medium">{category.category_name}</p>
+                    <p className="text-xs text-neutral-400 mt-1">{hotel.hotel_name}</p>
+                  </div>
+                )}
+                <div className="absolute top-3 left-3">
+                  <span className="rounded-full bg-black/70 backdrop-blur-xs px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white uppercase border border-white/20">
+                    Selected Sanctuary
+                  </span>
+                </div>
+              </div>
 
-              {/* ROOM DETAILS CARD */}
-              <div className="overflow-hidden rounded-3xl border border-neutral-200/80 bg-white shadow-sm transition-all">
-
-                {/* Hero Room Media */}
-                <div className="relative h-64 sm:h-80 w-full overflow-hidden bg-neutral-100">
-                  {hotelImage ? (
-                    <img
-                      src={hotelImage}
-                      alt={category.category_name}
-                      className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-neutral-800 via-neutral-900 to-[#161722] text-white p-6 text-center">
-                      <BedDouble size={48} className="text-[#D7A441] mb-2 stroke-1" />
-                      <p className="text-base font-medium">{category.category_name}</p>
-                      <p className="text-xs text-neutral-400 mt-1">{hotel.hotel_name}</p>
-                    </div>
-                  )}
-
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-
-                  {/* Badges on image */}
-                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
-                    <span className="rounded-full bg-black/40 backdrop-blur-md px-3 py-1 text-xs font-medium border border-white/20">
-                      Selected Category
+              {/* Room Information & Controls */}
+              <div className="flex-1 p-5 sm:p-7 flex flex-col justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#B88428]">
+                      Confirmed Room Category
                     </span>
-                    <span className="text-xs font-semibold text-[#E5C368] drop-shadow">
-                      Direct Confirmation
+                    <span className="inline-flex items-center gap-1.5 text-xs text-neutral-600 bg-neutral-100/80 px-2.5 py-0.5 rounded-full border border-neutral-200/60 font-medium">
+                      <Users size={13} className="text-neutral-500" />
+                      Up to {category.max_occupancy || 1} {category.max_occupancy === 1 ? "Guest" : "Guests"} per room
                     </span>
                   </div>
-                </div>
 
-                {/* Content body */}
-                <div className="p-6 sm:p-8">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-[#B88428]">
-                        Accommodation Details
+                  <h2 className="mt-2 text-xl sm:text-2xl font-serif font-normal text-neutral-900 tracking-tight">
+                    {category.category_name}
+                  </h2>
+
+                  <p className="mt-2 text-xs sm:text-sm text-neutral-600 leading-relaxed max-w-2xl">
+                    {category.description || "Thoughtfully appointed guest sanctuary featuring bespoke Starlight bedding, dedicated workspace, and signature hospitality touches for a restorative stay."}
+                  </p>
+
+                  {/* Room Switcher Pills */}
+                  {availableCategories.length > 1 && (
+                    <div className="mt-4 pt-4 border-t border-neutral-100">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">
+                        Switch Category
                       </p>
-                      <h2 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">
-                        {category.category_name}
-                      </h2>
-
-                      {availableCategories.length > 1 && (
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] text-neutral-400 font-medium">Available Options:</span>
-                          {availableCategories.map((cat) => (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {availableCategories.map((cat) => {
+                          const isSelected = category?.id === cat.id;
+                          const fitsParty =
+                            guests >= (Number(cat?.min_occupancy) || 1) * rooms &&
+                            guests <= (Number(cat?.max_occupancy) || 3) * rooms;
+                          return (
                             <button
                               key={cat.id}
                               type="button"
@@ -1202,772 +1360,646 @@ function Bookings() {
                                 setSelectedCategoryId(cat.id);
                                 setCategory(cat);
                               }}
-                              className={`rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${category?.id === cat.id
-                                ? "bg-[#1B1E28] text-[#D7A441] shadow-xs ring-1 ring-[#D7A441]/40"
-                                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                              className={`rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
+                                  ? "bg-[#171922] text-white shadow-xs"
+                                  : fitsParty
+                                    ? "bg-amber-50 text-[#966A1E] hover:bg-amber-100/80 border border-amber-200/80"
+                                    : "bg-neutral-100/90 text-neutral-700 hover:bg-neutral-200/90 border border-neutral-200/60"
                                 }`}
                             >
-                              {cat.category_name}
+                              <span>{cat.category_name}</span>
+                              {fitsParty && !isSelected && (
+                                <span className="text-[10px] text-[#D7A441] font-bold">• Fits</span>
+                              )}
                             </button>
-                          ))}
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          </section>
+
+
+          {/* 2. TOTAL BOOKING SUMMARY GRID (Directly Below Accommodation Details) */}
+          <section
+            aria-label="Booking Summary and Guest Contact"
+            className="rounded-2xl border border-[#EAE6DF] bg-white shadow-[0_2px_16px_rgba(0,0,0,0.03)] relative"
+          >
+            {/* Header bar */}
+            <div className="rounded-t-2xl border-b border-[#EAE6DF] bg-[#FAF9F6] px-5 sm:px-7 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-base sm:text-lg font-serif font-medium text-neutral-900">
+                  Reservation Summary &amp; Guest Contact
+                </h3>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Confirm your stay itinerary and primary contact for front-desk check-in
+                </p>
+              </div>
+
+              <div className="flex items-baseline gap-2 self-start sm:self-auto bg-white px-3.5 py-1.5 rounded-xl border border-neutral-200/80 shadow-2xs">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                  Total Payable:
+                </span>
+                <span className="text-lg sm:text-xl font-bold font-serif text-neutral-900">
+                  ₹{finalTotal.toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {/* Two-Column Grid: Left = Stay Itinerary & Primary Guest; Right = Folio & CTA */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAE6DF]">
+
+              {/* LEFT SUB-GRID: Dates & Rooms/Occupancy */}
+              <div className="lg:col-span-6 p-5 sm:p-7 space-y-6">
+
+                {/* Sub-section: Stay Dates */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                      <CalendarDays size={14} className="text-[#D7A441]" />
+                      Stay Itinerary
+                    </h4>
+                    <span className="text-xs font-medium text-[#B88428] bg-amber-50/80 border border-amber-200/60 px-2.5 py-0.5 rounded-md">
+                      {nights} {nights === 1 ? "Night" : "Nights"} Stay
+                    </span>
+                  </div>
+
+                  {/* Custom Calendar Trigger Cards & Dropdown Container */}
+                  <div ref={calendarContainerRef} className="relative">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Check-In Card */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCalendarTarget("checkIn");
+                          setActiveDropdown(activeDropdown === "calendar" && calendarTarget === "checkIn" ? null : "calendar");
+                        }}
+                        className={`group relative flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer ${activeDropdown === "calendar" && calendarTarget === "checkIn"
+                            ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
+                            : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
+                          }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                              Check-In
+                            </span>
+                            <span className="text-[10px] text-neutral-400">From 12:00 PM</span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <CalendarDays size={16} className="text-[#D7A441] shrink-0" />
+                            <span className="text-sm font-semibold text-neutral-900 truncate">
+                              {formatDateDisplay(selectedCheckIn)}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronDown
+                          size={15}
+                          className={`text-neutral-400 transition-transform ml-2 shrink-0 ${activeDropdown === "calendar" && calendarTarget === "checkIn" ? "rotate-180 text-[#B88428]" : ""
+                            }`}
+                        />
+                      </button>
+
+                      {/* Check-Out Card */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCalendarTarget("checkOut");
+                          setActiveDropdown(activeDropdown === "calendar" && calendarTarget === "checkOut" ? null : "calendar");
+                        }}
+                        className={`group relative flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer ${activeDropdown === "calendar" && calendarTarget === "checkOut"
+                            ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
+                            : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
+                          }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                              Check-Out
+                            </span>
+                            <span className="text-[10px] text-neutral-400">By 11:00 AM</span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <CalendarDays size={16} className="text-[#D7A441] shrink-0" />
+                            <span className="text-sm font-semibold text-neutral-900 truncate">
+                              {formatDateDisplay(selectedCheckOut)}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronDown
+                          size={15}
+                          className={`text-neutral-400 transition-transform ml-2 shrink-0 ${activeDropdown === "calendar" && calendarTarget === "checkOut" ? "rotate-180 text-[#B88428]" : ""
+                            }`}
+                        />
+                      </button>
+                    </div>
+                    {/* FLOATING CALENDAR POPOVER (HOME SEARCH LUXURY DESIGN WITH SQUARE DATES) */}
+                    {activeDropdown === "calendar" && (
+                      <div className="absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-full mt-2.5 w-full sm:w-[600px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/15 bg-[#0D0E12] p-4 sm:p-6 shadow-[0_25px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl z-50 text-left animate-in fade-in duration-200">
+                        {/* Calendar Header matching Home Search */}
+                        <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
+                          <button
+                            type="button"
+                            disabled={calendarMonthOffset <= 0}
+                            onClick={() => setCalendarMonthOffset((prev) => prev - 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                            aria-label="Previous month"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+
+                          <div className="rounded-full border border-[#D7A441]/40 bg-[#D7A441]/10 px-3.5 sm:px-4 py-1 text-[10px] sm:text-[11px] font-bold tracking-[0.16em] sm:tracking-[0.2em] text-[#D7A441] uppercase">
+                            {calendarTarget === "checkIn" ? "Select Check-in" : "Select Check-out"}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setCalendarMonthOffset((prev) => prev + 1)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition cursor-pointer"
+                              aria-label="Next month"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveDropdown(null)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition cursor-pointer"
+                              aria-label="Close calendar"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Dual Month Calendar View */}
+                        <div className="flex flex-col sm:flex-row gap-5 justify-center">
+                          {renderMonthCalendar(month1Date)}
+                          <div className="hidden sm:block w-px bg-white/10" />
+                          <div className="hidden sm:block">
+                            {renderMonthCalendar(month2Date)}
+                          </div>
+                        </div>
+
+                        {/* Calendar Footer */}
+                        <div className="mt-4 pt-3.5 border-t border-white/10 flex items-center justify-between text-xs">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCheckIn("");
+                              setSelectedCheckOut("");
+                              setCalendarTarget("checkIn");
+                            }}
+                            className="text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
+                          >
+                            Clear dates
+                          </button>
+
+                          <span className="text-white/70 text-xs font-medium">
+                            {selectedCheckIn && selectedCheckOut
+                              ? `${nights} ${nights === 1 ? "night" : "nights"} stay`
+                              : calendarTarget === "checkIn"
+                                ? "Select check-in date"
+                                : "Select check-out date"}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => setActiveDropdown(null)}
+                            className="rounded-xl bg-[#D7A441] text-neutral-950 px-4 py-1.5 font-bold text-xs hover:bg-[#E5B555] shadow-xs transition-colors cursor-pointer"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sub-section: Rooms & Guests */}
+                <div className="border-t border-neutral-100 pt-5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700 mb-3 flex items-center gap-1.5">
+                    <Users size={14} className="text-[#D7A441]" />
+                    Rooms &amp; Occupancy
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Professional Guests Dropdown */}
+                    <div ref={guestsDropdownRef} className="relative">
+                      <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+                        Total Guests
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setActiveDropdown(activeDropdown === "guests" ? null : "guests")}
+                        className={`group w-full flex items-center justify-between rounded-xl border p-3 text-left transition-all cursor-pointer ${activeDropdown === "guests"
+                            ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
+                            : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
+                          }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D7A441]/10 text-[#B88428]">
+                            <Users size={16} />
+                          </div>
+                          <div>
+                            <span className="block text-sm font-semibold text-neutral-900 leading-tight">
+                              {guests} {guests === 1 ? "Guest" : "Guests"}
+                            </span>
+                            <span className="block text-[10px] text-neutral-400 mt-0.5">
+                              Allowed: {minimumGuests}–{maximumGuests} for {rooms} {rooms === 1 ? "room" : "rooms"}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronDown
+                          size={15}
+                          className={`text-neutral-400 group-hover:text-[#B88428] transition-transform ml-2 shrink-0 ${activeDropdown === "guests" ? "rotate-180 text-[#B88428]" : ""
+                            }`}
+                        />
+                      </button>
+
+                      {/* Professional Guest Dropdown Popover */}
+                      {activeDropdown === "guests" && (
+                        <div className="absolute left-0 top-full mt-2 w-full sm:w-[340px] rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 text-left animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between pb-3.5 border-b border-neutral-100">
+                            <div>
+                              <h5 className="text-xs font-bold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5">
+                                <Users size={14} className="text-[#D7A441]" />
+                                Guest Selection
+                              </h5>
+                              <p className="text-[11px] text-neutral-500 mt-0.5">
+                                For {rooms} {rooms === 1 ? "room" : "rooms"} ({minimumGuests}–{maximumGuests} guests permitted)
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setActiveDropdown(null)}
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition cursor-pointer"
+                              aria-label="Close guest dropdown"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+
+                          {/* Guest Stepper */}
+                          <div className="py-4 border-b border-neutral-100 flex items-center justify-between">
+                            <div>
+                              <span className="text-sm font-semibold text-neutral-900 block">Total Guests</span>
+                              <span className="text-[11px] text-neutral-400">Adults &amp; Children included</span>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                disabled={guests <= minimumGuests}
+                                onClick={() => changeGuests(guests - 1)}
+                                aria-label="Decrease guest count"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition shadow-2xs"
+                              >
+                                <Minus size={13} />
+                              </button>
+                              <span className="text-base font-bold text-neutral-900 min-w-[24px] text-center">
+                                {guests}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={guests >= maximumGuests}
+                                onClick={() => changeGuests(guests + 1)}
+                                aria-label="Increase guest count"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition shadow-2xs"
+                              >
+                                <Plus size={13} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Quick selection options */}
+                          <div className="pt-3.5 pb-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-2">
+                              Quick Select
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {Array.from(
+                                { length: maximumGuests - minimumGuests + 1 },
+                                (_, index) => minimumGuests + index
+                              ).map((count) => {
+                                const isSelected = guests === count;
+                                return (
+                                  <button
+                                    key={count}
+                                    type="button"
+                                    onClick={() => {
+                                      changeGuests(count);
+                                    }}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${isSelected
+                                        ? "bg-[#D7A441] text-neutral-950 shadow-xs"
+                                        : "bg-neutral-100/80 text-neutral-700 hover:bg-neutral-200"
+                                      }`}
+                                  >
+                                    <span>{count} {count === 1 ? "Guest" : "Guests"}</span>
+                                    {isSelected && <Check size={12} className="stroke-[3]" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Additional Guest Charges Warning - Displays when maximum guest count is reached */}
+                          {guests >= maximumGuests && (
+                            <div className="mt-3.5 rounded-xl bg-[#FAF5EC] border border-[#EEDDB8] p-3 text-[#8C6214] animate-in fade-in duration-200 shadow-2xs">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-[#8C6214]">
+                                <Info size={15} className="shrink-0 text-[#966A1E]" />
+                                <span>Additional Guest Charges</span>
+                              </div>
+                              <p className="mt-1 text-[11px] text-[#8C6214]/90 pl-5 leading-relaxed">
+                                Additional charges apply for extra guests as per hotel policy.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700 self-start sm:self-auto">
-                      <BedDouble size={14} className="text-[#D7A441]" />
-                      <span>Bespoke Suite</span>
-                    </div>
-                  </div>
-
-                  <p className="mt-4 text-sm leading-relaxed text-neutral-600">
-                    {category.description ||
-                      "Individually curated luxury space with premium bedding, fine bath fittings, and generous natural light designed for your complete relaxation."}
-                  </p>
-
-                  {/* Quick Feature Pills */}
-                  <div className="mt-6 flex flex-wrap gap-2.5">
-                    <span className="inline-flex items-center gap-1.5 rounded-2xl bg-neutral-100/90 border border-neutral-200/80 px-3.5 py-1.5 text-xs font-medium text-neutral-700">
-                      <Users size={14} className="text-[#D7A441]" />
-                      Up to {category.max_occupancy || 1} {category.max_occupancy === 1 ? "Guest" : "Guests"}
-                    </span>
-
-                    <span className="inline-flex items-center gap-1.5 rounded-2xl bg-neutral-100/90 border border-neutral-200/80 px-3.5 py-1.5 text-xs font-medium text-neutral-700">
-                      <BedDouble size={14} className="text-[#D7A441]" />
-                      King or Twin Beds
-                    </span>
-
-                    <span className="inline-flex items-center gap-1.5 rounded-2xl bg-neutral-100/90 border border-neutral-200/80 px-3.5 py-1.5 text-xs font-medium text-neutral-700">
-                      <AirVent size={14} className="text-[#D7A441]" />
-                      Climate Controlled
-                    </span>
-
-                    <span className="inline-flex items-center gap-1.5 rounded-2xl bg-neutral-100/90 border border-neutral-200/80 px-3.5 py-1.5 text-xs font-medium text-neutral-700">
-                      <Wifi size={14} className="text-[#D7A441]" />
-                      Complimentary High-Speed Wi-Fi
-                    </span>
-                  </div>
-
-                </div>
-              </div>
-
-
-              {/* PRIMARY GUEST DETAILS CARD */}
-              <div className="overflow-hidden rounded-3xl border border-neutral-200/80 bg-white p-6 sm:p-8 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-neutral-200/70 pb-5">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-[#B88428]">
-                        <User size={18} />
-                      </div>
-                      <h2 className="text-lg font-bold text-neutral-900">
-                        Primary Guest Details
-                      </h2>
-                    </div>
-                    <p className="mt-1 text-xs sm:text-sm text-neutral-500">
-                      Booking confirmation voucher and hotel check-in will be issued to these details
-                    </p>
-                  </div>
-
-                  {currentUser ? (
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
-                      <CheckCircle2 size={13} className="text-emerald-600" />
-                      <span>Authenticated Account</span>
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50/80 px-3 py-1 text-xs font-semibold text-[#B88428] border border-amber-200/60 shrink-0 self-start sm:self-auto">
-                      <Sparkles size={13} className="text-[#D7A441]" />
-                      <span>Direct Guest Booking</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                  {/* Full Name */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
-                      Full Name <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
-                        <User size={16} />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="e.g. Rahul Sharma"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        required
-                        className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] pl-11 pr-4 py-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Email */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
-                      Email Address <span className="text-neutral-400 font-normal normal-case">(Optional)</span>
-                    </label>
-                    <div className="relative">
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
-                        <Mail size={16} />
-                      </div>
-                      <input
-                        type="email"
-                        placeholder="e.g. rahul@example.com"
-                        value={guestEmail}
-                        onChange={(e) => setGuestEmail(e.target.value)}
-                        required
-                        className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] pl-11 pr-4 py-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Phone */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
-                      Mobile Number <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-neutral-400">
-                        <Phone size={16} />
-                      </div>
-                      <input
-                        type="tel"
-                        placeholder="e.g. 9876543210"
-                        value={guestPhone}
-                        onChange={(e) => setGuestPhone(e.target.value)}
-                        required
-                        className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] pl-11 pr-4 py-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Special Requests */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1.5">
-                      Special Requests <span className="text-neutral-400 font-normal normal-case">(Optional)</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g. Early check-in preference, high floor, non-smoking, celebration arrangement..."
-                      value={specialRequests}
-                      onChange={(e) => setSpecialRequests(e.target.value)}
-                      className="w-full rounded-2xl border border-neutral-300 bg-[#FCFCFD] p-3.5 text-sm font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#D7A441] focus:bg-white focus:ring-2 focus:ring-[#D7A441]/20"
-                    />
-                  </div>
-                </div>
-
-
-                {!currentUser && (
-                  <div className="mt-5 rounded-2xl bg-[#F9FAFB] border border-neutral-200/80 p-3.5 flex items-center gap-3">
-                    <ShieldCheck
-                      size={18}
-                      className="text-[#D7A441] shrink-0"
-                    />
-                    <p className="text-xs text-neutral-500 leading-relaxed">
-                      You can complete your reservation as a guest without signing in
-                      or creating an account. Your booking reference will be displayed
-                      after your reservation is successfully created.
-                    </p>
-                  </div>
-                )}
-
-              </div>
-
-
-              {/* AMENITIES CARD */}
-              <div className="overflow-hidden rounded-3xl border border-neutral-200/80 bg-white shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setAmenitiesOpen(!amenitiesOpen)}
-                  className="flex w-full items-center justify-between p-6 sm:p-7 text-left hover:bg-neutral-50/50 transition-colors cursor-pointer"
-                >
-                  <div>
-                    <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
-                      <Sparkles size={18} className="text-[#D7A441]" />
-                      Room Amenities & Inclusions
-                    </h2>
-                    <p className="mt-1 text-xs sm:text-sm text-neutral-500">
-                      Everything provided in your suite for a seamless stay
-                    </p>
-                  </div>
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-neutral-600">
-                    {amenitiesOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                  </div>
-                </button>
-
-                {amenitiesOpen && (
-                  <div className="border-t border-neutral-200/70 p-6 sm:p-7 bg-[#FCFCFD]">
-                    {amenities.length === 0 ? (
-                      <p className="text-sm text-neutral-500 italic">
-                        Standard luxury amenities included for this category.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-                          {(showAllAmenities ? amenities : amenities.slice(0, 6)).map((amenity) => {
-                            const Icon = getAmenityIcon(amenity.icon);
-
-                            return (
-                              <div
-                                key={amenity.id}
-                                className="flex items-center gap-3.5 rounded-2xl border border-neutral-200/80 bg-white p-3.5 text-xs sm:text-sm font-medium text-neutral-800 shadow-xs hover:border-[#D7A441]/50 transition-all"
-                              >
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#B88428]">
-                                  <Icon size={16} strokeWidth={2} />
-                                </div>
-                                <span className="truncate">{amenity.name}</span>
-                              </div>
-                            );
-                          })}
+                    {/* Professional Room Count Stepper */}
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+                        Number of Rooms
+                      </label>
+                      <div className="flex items-center justify-between rounded-xl border border-neutral-200/90 bg-[#FAFAFA] p-2 hover:border-[#D7A441]/60 transition-all">
+                        <div className="flex items-center gap-2.5 pl-1.5 min-w-0">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D7A441]/10 text-[#B88428] shrink-0">
+                            <BedDouble size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-sm font-bold text-neutral-900 block leading-tight truncate">
+                              {rooms} {rooms === 1 ? "Room" : "Rooms"}
+                            </span>
+                            <span className="text-[10px] text-neutral-400 block truncate">
+                              Up to {maxGuestsPerRoom} guests/room
+                            </span>
+                          </div>
                         </div>
 
-                        {amenities.length > 6 && (
+                        <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-neutral-200/90 shadow-2xs shrink-0">
                           <button
                             type="button"
-                            onClick={() => setShowAllAmenities((value) => !value)}
-                            className="mt-5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[#B88428] hover:text-[#976a1c] underline underline-offset-4 cursor-pointer"
+                            onClick={decreaseRooms}
+                            disabled={rooms <= 1}
+                            aria-label="Decrease room count"
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-100 text-neutral-700 hover:bg-neutral-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
                           >
-                            {showAllAmenities ? "Show fewer amenities ↑" : `View all ${amenities.length} amenities ↓`}
+                            <Minus size={13} />
                           </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-
-              {/* STARLIGHT 4-PILLAR ASSURANCE (Elivaas / MakeMyTrip style) */}
-              <div className="rounded-3xl border border-neutral-200/80 bg-gradient-to-br from-white to-[#F9FAFB] p-6 sm:p-8 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={20} className="text-[#D7A441]" />
-                  <h3 className="text-base font-bold text-neutral-900">
-                    The Starlight Assurance
-                  </h3>
-                </div>
-
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-neutral-200/70 bg-white p-4">
-                    <div className="flex items-center gap-2.5 font-semibold text-xs sm:text-sm text-neutral-900">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs">✓</span>
-                      Direct Best Rate Promise
-                    </div>
-                    <p className="mt-1.5 text-[11px] sm:text-xs leading-relaxed text-neutral-500">
-                      Zero hidden platform markups. What you see is direct from property pricing.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-neutral-200/70 bg-white p-4">
-                    <div className="flex items-center gap-2.5 font-semibold text-xs sm:text-sm text-neutral-900">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs">✓</span>
-                      Instant Room Allocation
-                    </div>
-                    <p className="mt-1.5 text-[11px] sm:text-xs leading-relaxed text-neutral-500">
-                      Guaranteed reservation confirmation instantly synced with the front desk.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-neutral-200/70 bg-white p-4">
-                    <div className="flex items-center gap-2.5 font-semibold text-xs sm:text-sm text-neutral-900">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs">✓</span>
-                      24/7 Dedicated Concierge
-                    </div>
-                    <p className="mt-1.5 text-[11px] sm:text-xs leading-relaxed text-neutral-500">
-                      Personal on-ground support before, during, and after your stay.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-neutral-200/70 bg-white p-4">
-                    <div className="flex items-center gap-2.5 font-semibold text-xs sm:text-sm text-neutral-900">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs">✓</span>
-                      Spotless & Sanitized
-                    </div>
-                    <p className="mt-1.5 text-[11px] sm:text-xs leading-relaxed text-neutral-500">
-                      Strict 50-point hygiene inspection completed prior to every guest arrival.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-
-              {/* POLICIES & HOUSE RULES */}
-              <div className="rounded-3xl border border-neutral-200/80 bg-white p-6 sm:p-8 shadow-sm">
-                <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
-                  <Clock size={18} className="text-[#D7A441]" />
-                  Stay Policies & House Rules
-                </h2>
-
-                <div className="mt-6 grid gap-6 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-neutral-200/70 bg-[#F9FAFB] p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                      Check-in
-                    </p>
-                    <p className="mt-1 text-base font-bold text-neutral-900">
-                      From 12:00 PM
-                    </p>
-                    <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">
-                      Early check-in is subject to room availability upon arrival.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-neutral-200/70 bg-[#F9FAFB] p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                      Check-out
-                    </p>
-                    <p className="mt-1 text-base font-bold text-neutral-900">
-                      By 11:00 AM
-                    </p>
-                    <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">
-                      Late check-out available on request through the front desk.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-2.5 border-t border-neutral-200/70 pt-5 text-xs text-neutral-600">
-                  <p className="flex items-start gap-2">
-                    <span className="font-bold text-neutral-800">•</span>
-                    <span><strong>Government Identification:</strong> Valid government-issued photo ID (Aadhaar, Passport, or Driving License) is mandatory for all adult guests at check-in.</span>
-                  </p>
-                  <p className="flex items-start gap-2">
-                    <span className="font-bold text-neutral-800">•</span>
-                    <span><strong>Guest Welcoming:</strong> Couples, families, and solo business travelers are all warmly accommodated.</span>
-                  </p>
-                  <p className="flex items-start gap-2">
-                    <span className="font-bold text-neutral-800">•</span>
-                    <span><strong>Property Decorum:</strong> Non-smoking guest rooms. Quiet hours observed between 10:00 PM and 7:00 AM.</span>
-                  </p>
-                </div>
-              </div>
-
-
-              {/* GUEST REVIEWS & SENTIMENT */}
-              <div className="overflow-hidden rounded-3xl border border-neutral-200/80 bg-white shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setReviewsOpen(!reviewsOpen)}
-                  className="flex w-full items-center justify-between p-6 sm:p-7 text-left hover:bg-neutral-50/50 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-[#B88428] font-bold text-sm">
-                      ★ {hotelRating.score}
-                    </div>
-                    <div>
-                      <h2 className="text-base sm:text-lg font-bold text-neutral-900">
-                        Guest Reviews & Ratings
-                      </h2>
-                      <p className="text-xs text-neutral-500">
-                        {hotelRating.label} · Based on {hotelRating.reviews} genuine traveler experiences
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-neutral-600">
-                    {reviewsOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                  </div>
-                </button>
-
-                {reviewsOpen && (
-                  <div className="border-t border-neutral-200/70 p-6 sm:p-7 bg-[#FCFCFD]">
-                    {/* Score categories breakdown */}
-                    <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                      <div>
-                        <div className="flex justify-between font-semibold text-neutral-800 mb-1">
-                          <span>Cleanliness & Hygiene</span>
-                          <span className="text-[#B88428]">4.9 / 5.0</span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-neutral-200 overflow-hidden">
-                          <div className="h-full rounded-full bg-[#D7A441]" style={{ width: "98%" }} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between font-semibold text-neutral-800 mb-1">
-                          <span>Staff & Hospitality</span>
-                          <span className="text-[#B88428]">4.9 / 5.0</span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-neutral-200 overflow-hidden">
-                          <div className="h-full rounded-full bg-[#D7A441]" style={{ width: "98%" }} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between font-semibold text-neutral-800 mb-1">
-                          <span>Bed Comfort & Quietness</span>
-                          <span className="text-[#B88428]">4.8 / 5.0</span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-neutral-200 overflow-hidden">
-                          <div className="h-full rounded-full bg-[#D7A441]" style={{ width: "96%" }} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between font-semibold text-neutral-800 mb-1">
-                          <span>Value for Money</span>
-                          <span className="text-[#B88428]">4.7 / 5.0</span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-neutral-200 overflow-hidden">
-                          <div className="h-full rounded-full bg-[#D7A441]" style={{ width: "94%" }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-5 rounded-2xl bg-white border border-neutral-200/70 p-4 text-xs text-neutral-600">
-                      <p className="italic">
-                        "The room was exceptionally immaculate and the check-in process was instantaneous. The Starlight hospitality standards truly elevate this property."
-                      </p>
-                      <p className="mt-2 font-bold text-neutral-800">
-                        — Verified Starlight Guest · Stayed recently
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-
-            {/* =================================================
-              RIGHT COLUMN — STICKY BOOKING & PRICE SUMMARY CARD
-              (Booking.com / MakeMyTrip / Elivaas Standard)
-            ================================================= */}
-            <aside className="lg:sticky lg:top-28 space-y-4">
-
-              <div className="overflow-hidden rounded-3xl border border-neutral-200/90 bg-white shadow-xl">
-
-                {/* Top Luxury Banner */}
-                <div className="bg-gradient-to-r from-[#1B1E28] via-[#2A2E3D] to-[#1B1E28] p-5 sm:p-6 text-white">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#E5C368]">
-                        Booking Summary
-                      </span>
-                      <h3 className="mt-1 text-lg font-bold truncate max-w-[220px]">
-                        {category.category_name}
-                      </h3>
-                      <p className="text-xs text-neutral-300 truncate max-w-[220px]">
-                        {hotel.hotel_name}
-                      </p>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <p className="text-2xl font-bold tracking-tight text-[#E5C368]">
-                        ₹{roomTotal.toLocaleString("en-IN")}
-                      </p>
-                      <p className="text-[11px] text-neutral-300 mt-0.5">
-                        {nights} {nights === 1 ? "night" : "nights"} stay
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-
-                {/* INTERACTIVE DATE SELECTOR */}
-                <div className="border-b border-neutral-200/70">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-neutral-200/70 bg-[#FCFCFD]">
-
-                    {/* Check-in */}
-                    <div className="p-4 transition-colors hover:bg-white">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
-                        <CalendarDays size={14} className="text-[#D7A441]" />
-                        Check-in
-                      </div>
-
-                      <input
-                        type="date"
-                        value={selectedCheckIn || ""}
-                        min={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          const newCheckIn = e.target.value;
-                          setSelectedCheckIn(newCheckIn);
-
-                          if (
-                            selectedCheckOut &&
-                            newCheckIn >= selectedCheckOut
-                          ) {
-                            setSelectedCheckOut("");
-                          }
-                        }}
-                        className="mt-1.5 w-full cursor-pointer bg-transparent text-xs sm:text-sm font-bold text-neutral-900 outline-none"
-                      />
-
-                      <p className="mt-1 text-[10px] text-neutral-400">
-                        Standard: 12:00 PM
-                      </p>
-                    </div>
-
-                    {/* Check-out */}
-                    <div className="p-4 transition-colors hover:bg-white">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
-                        <CalendarDays size={14} className="text-[#D7A441]" />
-                        Check-out
-                      </div>
-
-                      <input
-                        type="date"
-                        value={selectedCheckOut || ""}
-                        min={selectedCheckIn || ""}
-                        disabled={!selectedCheckIn}
-                        onChange={(e) => setSelectedCheckOut(e.target.value)}
-                        className="mt-1.5 w-full cursor-pointer bg-transparent text-xs sm:text-sm font-bold text-neutral-900 outline-none disabled:cursor-not-allowed disabled:opacity-40"
-                      />
-
-                      <p className="mt-1 text-[10px] text-neutral-400">
-                        Standard: 11:00 AM
-                      </p>
-                    </div>
-
-                  </div>
-
-                  {/* Duration Pill Indicator */}
-                  <div className="bg-amber-50/60 px-4 py-2 text-center text-xs font-semibold text-[#B88428] border-t border-neutral-100 flex items-center justify-center gap-2">
-                    <Clock size={13} className="text-[#D7A441]" />
-                    <span>Duration: {nights} {nights === 1 ? "Night" : "Nights"}</span>
-                  </div>
-                </div>
-
-
-                {/* GUESTS SELECTOR */}
-                <div className="border-b border-neutral-200/70 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-neutral-700">
-                        <Users size={18} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-neutral-500">Guests</p>
-                        <p className="text-sm font-bold text-neutral-900">
-                          {guests} {guests === 1 ? "Guest" : "Guests"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <select
-                      value={guests}
-                      onChange={(e) => changeGuests(e.target.value)}
-                      className="rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-semibold text-neutral-800 shadow-xs outline-none focus:border-[#D7A441] focus:ring-2 focus:ring-[#D7A441]/20 cursor-pointer"
-                    >
-                      {Array.from(
-                        { length: maximumGuests - minimumGuests + 1 },
-                        (_, index) => minimumGuests + index
-                      ).map((count) => (
-                        <option key={count} value={count}>
-                          {count} {count === 1 ? "Guest" : "Guests"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <p className="mt-2.5 text-[11px] text-neutral-400">
-                    Occupancy range:{" "}
-                    <strong className="text-neutral-700">
-                      {minimumGuests}–{maximumGuests} guests
-                    </strong>
-                  </p>
-
-                  {guests >= maximumGuests && (
-                    <p className="mt-1 text-[11px] font-semibold text-amber-700">
-                      Maximum room capacity reached.
-                    </p>
-                  )}
-                </div>
-
-                {occupancyError && (
-                  <p className="px-5 pb-3 text-xs text-red-600">
-                    {occupancyError}
-                  </p>
-                )}
-
-
-                {/* ROOMS SELECTOR & LIVE INVENTORY */}
-                <div className="border-b border-neutral-200/70 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-semibold text-neutral-500">Rooms</p>
-                      <p className="text-sm font-bold text-neutral-900">
-                        {rooms} {rooms === 1 ? "Room" : "Rooms"}
-                      </p>
-                    </div>
-
-                    {/* Stepper */}
-                    <div className="flex items-center rounded-xl border border-neutral-300 bg-neutral-50/50 p-1">
-                      <button
-                        type="button"
-                        onClick={decreaseRooms}
-                        disabled={rooms <= 1}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-neutral-700 shadow-xs transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
-                        aria-label="Decrease rooms"
-                      >
-                        <Minus size={14} />
-                      </button>
-
-                      <span className="min-w-8 text-center text-sm font-bold text-neutral-900">
-                        {rooms}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={increaseRooms}
-                        disabled={
-                          rooms >= availableRooms ||
-                          availableRooms <= 0
-                        }
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-neutral-700 shadow-xs transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
-                        aria-label="Increase rooms"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Live room inventory badge */}
-                  <div className="mt-4 rounded-2xl bg-neutral-50 border border-neutral-200/80 px-3.5 py-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-500 font-medium">
-                        Live Availability:
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700">
-                        <span className="relative flex h-2 w-2">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                        </span>
-                        {availabilityLoading
-                          ? "Checking inventory..."
-                          : `${availableRooms} of ${totalRooms} rooms free`}
-                      </span>
-                    </div>
-                  </div>
-
-                  {availabilityError && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
-                      {availabilityError}
-                    </p>
-                  )}
-                </div>
-                {/* PRICE BREAKDOWN TABLE */}
-                <div className="p-5 sm:p-6 bg-[#FCFCFD]">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-                    Transparent Price Details
-                  </h4>
-
-                  <div className="mt-4 space-y-3 text-xs sm:text-sm">
-                    {/* Individual room prices */}
-                    {roomPrices.map((price, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between text-neutral-600"
-                      >
-                        <div>
-                          <span>Room {index + 1} Price</span>
-                          <p className="text-[11px] text-neutral-400">
-                            {guestCounts[index]}{" "}
-                            {guestCounts[index] === 1 ? "guest" : "guests"}
-                          </p>
-                        </div>
-
-                        <span className="font-semibold text-neutral-900">
-                          ₹{(Number(price) / Math.max(nights, 1)).toLocaleString("en-IN", {
-                            maximumFractionDigits: 2,
-                          })}
-                          <span className="text-[10px] font-normal text-neutral-400">
-                            {" "}/ night
+                          <span className="text-xs font-bold text-neutral-900 px-1.5 min-w-[18px] text-center">
+                            {rooms}
                           </span>
+                          <button
+                            type="button"
+                            onClick={increaseRooms}
+                            disabled={rooms >= availableRooms || availableRooms <= 0}
+                            aria-label="Increase room count"
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-100 text-neutral-700 hover:bg-neutral-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-neutral-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className={`inline-block h-1.5 w-1.5 rounded-full ${availableRooms > 0 ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                          {availabilityLoading ? "Checking inventory..." : `${availableRooms} of ${totalRooms} rooms available`}
                         </span>
+                        {rooms >= availableRooms && availableRooms > 0 && (
+                          <span className="text-amber-600 font-medium text-[10px]">Max available reached</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional Guest Charges Notice when maximum guests reached */}
+                  {guests >= maximumGuests && (
+                    <div className="mt-3 rounded-xl bg-[#FAF5EC] border border-[#EEDDB8] p-3 text-[#8C6214] animate-in fade-in duration-200 shadow-2xs">
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-[#8C6214]">
+                        <Info size={14} className="shrink-0 text-[#966A1E]" />
+                        <span>Additional Guest Charges</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#8C6214]/90 pl-5 leading-relaxed">
+                        Additional charges apply for extra guests as per hotel policy.
+                      </p>
+                    </div>
+                  )}
+
+                  {occupancyError && (
+                    <div className="mt-2.5 rounded-lg bg-red-50 border border-red-200/80 p-2.5 text-xs text-red-700 flex items-center gap-1.5">
+                      <AlertCircle size={14} className="shrink-0 text-red-600" />
+                      <span>{occupancyError}</span>
+                    </div>
+                  )}
+                  {availabilityError && (
+                    <div className="mt-2.5 rounded-lg bg-red-50 border border-red-200/80 p-2.5 text-xs text-red-700 flex items-center gap-1.5">
+                      <AlertCircle size={14} className="shrink-0 text-red-600" />
+                      <span>{availabilityError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sub-section: PRIMARY GUEST INFORMATION (Moved to Left Side) */}
+                <div className="border-t border-neutral-100 pt-5">
+                  <div className="rounded-2xl border border-neutral-200/90 bg-white p-5 sm:p-6 relative overflow-hidden shadow-xs">
+                    {/* Decorative golden corner swoop */}
+                    <div className="pointer-events-none absolute -top-8 -right-8 h-28 w-28 rounded-full bg-gradient-to-bl from-amber-200/60 via-amber-100/30 to-transparent" />
+                    <div className="pointer-events-none absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-amber-300/50 rounded-tr-2xl" />
+
+                    {/* Header */}
+                    <div className="flex items-center gap-3 mb-5 relative z-10">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FAF5EC] border border-[#EFE5D3] text-[#B88428] shrink-0 shadow-2xs">
+                        <User size={20} className="text-[#B88428]" />
+                      </div>
+                      <h4 className="text-sm sm:text-base font-bold uppercase tracking-wider text-neutral-900 font-sans">
+                        PRIMARY GUEST INFORMATION
+                      </h4>
+                    </div>
+
+                    {/* Fields */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+                      {/* Full Name */}
+                      <div>
+                        <label htmlFor="guest-full-name" className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                          Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative rounded-xl border border-neutral-200/90 bg-[#FDFCFB] hover:border-neutral-300 focus-within:border-[#D7A441] focus-within:ring-2 focus-within:ring-[#D7A441]/20 transition-all">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-neutral-400">
+                            <User size={16} />
+                          </div>
+                          <input
+                            id="guest-full-name"
+                            type="text"
+                            placeholder="e.g. Vikram Malhotra"
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            required
+                            className="w-full bg-transparent pl-10 pr-3.5 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Mobile Number */}
+                      <div>
+                        <label htmlFor="guest-phone-number" className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                          Mobile Number <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative rounded-xl border border-neutral-200/90 bg-[#FDFCFB] hover:border-neutral-300 focus-within:border-[#D7A441] focus-within:ring-2 focus-within:ring-[#D7A441]/20 transition-all">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-neutral-400">
+                            <Phone size={16} />
+                          </div>
+                          <input
+                            id="guest-phone-number"
+                            type="tel"
+                            placeholder="e.g. 9876543210"
+                            value={guestPhone}
+                            onChange={(e) => setGuestPhone(e.target.value)}
+                            required
+                            className="w-full bg-transparent pl-10 pr-3.5 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none font-medium"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="mt-4 text-[11px] text-neutral-500 leading-relaxed relative z-10">
+                      Booking voucher, reservation SMS, and front-desk check-in credentials will be registered to this contact.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* RIGHT SUB-GRID: TARIFF, FOLIO & PAYMENT SETTLEMENT */}
+              <div className="lg:col-span-6 p-5 sm:p-6 lg:p-7 space-y-4 bg-[#FAF9F6] lg:sticky lg:top-24 self-start">
+
+                {/* 1. TARIFF & FOLIO SUMMARY CARD */}
+                <div className="rounded-2xl border border-amber-200/60 bg-[#FCF9F3]/90 p-4 sm:p-6 space-y-4 shadow-xs">
+                  {/* Header */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                      <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-[#F5EEDF] border border-[#E8DAC2] text-[#B88428] shrink-0 shadow-2xs">
+                        <FileText size={18} className="text-[#B88428]" />
+                      </div>
+                      <h4 className="text-xs sm:text-base font-bold uppercase tracking-wider text-neutral-900 font-sans leading-tight">
+                        TARIFF &amp; FOLIO SUMMARY
+                      </h4>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-semibold text-neutral-500 bg-amber-100/50 border border-amber-200/50 px-2 py-0.5 rounded-md shrink-0 whitespace-nowrap">
+                      INR (₹)
+                    </span>
+                  </div>
+
+                  {/* Inner White Breakdown Card */}
+                  <div className="rounded-xl border border-neutral-200/80 bg-white p-3.5 sm:p-5 space-y-3.5 text-xs sm:text-sm shadow-2xs">
+                    {/* Individual Room Rates with Bed icon */}
+                    {roomPrices.map((price, index) => (
+                      <div key={index} className="flex items-start sm:items-center justify-between gap-2 text-neutral-700">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap">
+                          <BedDouble size={15} className="text-neutral-400 shrink-0" />
+                          <span className="font-medium text-neutral-800">Room {index + 1}</span>
+                          <span className="text-xs text-neutral-400">
+                            ({guestCounts[index]} {guestCounts[index] === 1 ? "guest" : "guests"})
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0 whitespace-nowrap">
+                          <span className="font-bold text-neutral-900">
+                            ₹{(Number(price) / Math.max(nights, 1)).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[11px] font-normal text-neutral-400"> / night</span>
+                        </div>
                       </div>
                     ))}
 
-                    {/* Stay duration */}
-                    <div className="flex items-center justify-between text-neutral-600">
-                      <span>Stay Duration</span>
-                      <span className="font-semibold text-neutral-900">
+                    {/* Stay Duration with Calendar icon */}
+                    <div className="flex items-center justify-between gap-2 text-neutral-700">
+                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                        <CalendarDays size={15} className="text-neutral-400 shrink-0" />
+                        <span>Stay Duration</span>
+                      </div>
+                      <span className="font-bold text-neutral-900 shrink-0 text-right whitespace-nowrap">
                         {nights} {nights === 1 ? "night" : "nights"}
                       </span>
                     </div>
 
-                    {/* Subtotal */}
-                    <div className="flex items-center justify-between text-neutral-600">
-                      <span>Subtotal</span>
-                      <span className="font-semibold text-neutral-900">
-                        ₹{subtotal.toLocaleString("en-IN", {
-                          maximumFractionDigits: 2,
-                        })}
+                    {/* Room Subtotal with FileText icon */}
+                    <div className="flex items-center justify-between gap-2 text-neutral-700">
+                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                        <FileText size={15} className="text-neutral-400 shrink-0" />
+                        <span>Room Subtotal</span>
+                      </div>
+                      <span className="font-bold text-neutral-900 shrink-0 text-right whitespace-nowrap">
+                        ₹{subtotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    {/* GST */}
-                    <div className="flex items-center justify-between text-neutral-600">
-                      <span>GST (5%)</span>
-                      <span className="font-semibold text-neutral-900">
-                        ₹{gstAmount.toLocaleString("en-IN", {
-                          maximumFractionDigits: 2,
-                        })}
+                    {/* Goods & Services Tax (5% GST) with Percent icon */}
+                    <div className="flex items-start sm:items-center justify-between gap-2 text-neutral-700">
+                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                        <Percent size={15} className="text-neutral-400 shrink-0" />
+                        <span className="leading-snug">Goods &amp; Services Tax (5% GST)</span>
+                      </div>
+                      <span className="font-bold text-neutral-900 shrink-0 text-right whitespace-nowrap">
+                        ₹{gstAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    {/* Sign-in discount */}
+                    {/* Member Privilege Savings Banner with Star icon */}
                     {signInDiscount > 0 && (
-                      <div className="flex items-center justify-between text-emerald-700">
-                        <span>Sign-in Discount (10%)</span>
-                        <span className="font-semibold">
-                          −₹{signInDiscount.toLocaleString("en-IN", {
-                            maximumFractionDigits: 2,
-                          })}
+                      <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50/90 border border-emerald-200/80 px-2.5 sm:px-3 py-2 text-emerald-800">
+                        <div className="flex items-center gap-1.5 sm:gap-2 font-medium min-w-0 flex-1">
+                          <Star size={15} className="text-emerald-600 fill-emerald-600 shrink-0" />
+                          <span className="leading-snug">Member Privilege Savings (10%)</span>
+                        </div>
+                        <span className="font-bold text-emerald-800 shrink-0 text-right whitespace-nowrap pl-2">
+                          −₹{signInDiscount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     )}
+                  </div>
 
-                    {/* Date-wise explanation */}
-                    <div className="rounded-xl bg-neutral-100/80 p-3 text-[11px] leading-relaxed text-neutral-500">
-                      Room prices are calculated using date-wise rates and the guest
-                      allocation for each selected room. The displayed room price is
-                      the average per night for your selected stay.
+                  {pricingError && (
+                    <div className="rounded-lg bg-red-50 border border-red-200/80 p-2.5 text-xs text-red-700">
+                      {pricingError}
                     </div>
+                  )}
+                </div>
 
-                    {/* Final total */}
-                    <div className="border-t border-neutral-200/80 pt-4">
-                      <div className="flex items-baseline justify-between">
-                        <div>
-                          <p className="text-sm font-bold text-neutral-900">
-                            Total Amount
-                          </p>
-                          <p className="text-[10px] text-neutral-400">
-                            Includes GST and applicable discounts
-                          </p>
-                        </div>
+                {/* 2. TOTAL PAYABLE GOLDEN CARD */}
+                <div className="rounded-2xl border border-[#E9D9B8] bg-gradient-to-r from-[#F9F3E5] via-[#FFFDF9] to-[#F7EDD7] p-4 sm:p-5 flex items-center justify-between gap-3 relative overflow-hidden shadow-xs">
+                  {/* Subtle golden corner ambient ribbons */}
+                  <div className="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full bg-gradient-to-tr from-amber-300/30 to-transparent blur-xs" />
+                  <div className="pointer-events-none absolute -top-8 -right-8 h-28 w-28 rounded-full bg-gradient-to-bl from-amber-200/30 to-transparent blur-xs" />
 
-                        <p className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900">
-                          ₹{finalTotal.toLocaleString("en-IN", {
-                            maximumFractionDigits: 2,
-                          })}
-                        </p>
-                      </div>
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 z-10 flex-1">
+                    <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-[#EFE3C8] border border-[#DECDA6] text-[#8C6218] shrink-0 shadow-2xs">
+                      <CreditCard size={18} className="text-[#8C6218]" />
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm sm:text-base lg:text-lg font-bold text-neutral-900 font-sans leading-tight">
+                        Total Payable
+                      </h4>
+                      <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-0.5 leading-tight">
+                        Inclusive of all room tariffs and GST
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0 z-10 pl-2">
+                    <span className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold text-[#4A3511] whitespace-nowrap block">
+                      ₹{finalTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                    </span>
                   </div>
                 </div>
 
-                {/* GUEST RECOGNITION STATUS */}
-                {currentUser ? (
-                  <div className="mt-5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 p-3 text-xs text-emerald-900 flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                      <span className="truncate">
-                        Reserving as <strong className="text-neutral-900">{guestName || currentUser.email}</strong>
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-5 rounded-2xl bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 flex items-start gap-2">
-                    <Sparkles size={15} className="text-[#D7A441] shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
-                      Guest details are retained securely during sign in / sign up.
-                    </p>
-                  </div>
-                )}
-
-                {/* ACTION BUTTON */}
-                <div className="mt-4">
+                {/* 3. COMPLETE RESERVATION ACTION BUTTON */}
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={handleBookNow}
@@ -1975,64 +2007,132 @@ function Bookings() {
                       bookingLoading || occupancyLoading || !occupancy || !!occupancyError ||
                       availableRooms <= 0 ||
                       rooms > availableRooms ||
-                      nights <= 0
+                      nights <= 0 ||
+                      pricingLoading || !priceSummary
                     }
-                    className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 font-bold py-4 px-6 text-sm sm:text-base shadow-md hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:from-neutral-300 disabled:to-neutral-300 disabled:text-neutral-500 cursor-pointer"
+                    className="w-full rounded-xl bg-[#171922] hover:bg-black active:scale-[0.99] text-white py-3.5 sm:py-4 px-6 font-semibold text-sm sm:text-base flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {bookingLoading ? (
                       <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-900 border-t-transparent" />
-                        <span>Securing Your Stay...</span>
-                        pricingLoading || !priceSummary
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span>Confirming Reservation...</span>
                       </>
                     ) : (
                       <>
                         <span>Complete Reservation</span>
-                        <ChevronRight
-                          size={18}
-                          className="transition-transform group-hover:translate-x-1"
-                        />
+                        <ChevronRight size={17} className="text-[#D7A441]" />
                       </>
                     )}
                   </button>
 
                   {bookingError && (
-                    <div className="mt-3 flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium">
+                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200/80 p-2.5 text-xs text-red-700">
                       <AlertCircle size={15} className="shrink-0 text-red-600" />
                       <span>{bookingError}</span>
                     </div>
                   )}
 
-                  <p className="mt-3 text-center text-[11px] text-neutral-400 leading-relaxed">
-                    By proceeding, you accept Starlight's{" "}
-                    <Link
-                      to="/terms"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-neutral-600 underline underline-offset-2 transition-colors hover:text-[#B88428]"
-                    >
-                      Terms &amp; Conditions
-                    </Link>{" "}
-                    and{" "}
-                    <Link
-                      to="/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-neutral-600 underline underline-offset-2 transition-colors hover:text-[#B88428]"
-                    >
-                      Privacy Policy
-                    </Link>
-                    . Direct front-desk booking settlement.
-                  </p>
+                  {/* Guaranteed Trust & Terms - Guarantee shield directly inline before Guaranteed */}
+                  <div className="mt-3.5 text-center space-y-1.5">
+                    <p className="text-xs text-neutral-600 max-w-sm mx-auto text-center leading-snug">
+                      <ShieldCheck size={14} className="inline-block -mt-0.5 mr-1 text-neutral-500 align-middle shrink-0" />
+                      <span>Guaranteed reservation with front-desk settlement.</span>
+                    </p>
+                    <p className="text-[11px] text-neutral-400 max-w-sm mx-auto leading-normal">
+                      By completing this booking, you agree to Starlight's{" "}
+                      <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-neutral-600 underline hover:text-neutral-900">
+                        Terms of Service
+                      </Link>{" "}
+                      and{" "}
+                      <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-neutral-600 underline hover:text-neutral-900">
+                        Privacy Policy
+                      </Link>.
+                    </p>
+                  </div>
                 </div>
 
               </div>
-            </aside>
 
-          </div>
-        </section >
+            </div>
+          </section>
 
-      </main >
+
+          {/* 3. ROOM AMENITIES & INCLUSIONS */}
+          <section
+            aria-label="Room Inclusions and Amenities"
+            className="rounded-2xl border border-[#EAE6DF] bg-white p-5 sm:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
+          >
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-neutral-100">
+              <div>
+                <h3 className="text-base sm:text-lg font-serif font-medium text-neutral-900">
+                  Room Inclusions &amp; Amenities
+                </h3>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Complementary conveniences provided in {category.category_name}
+                </p>
+              </div>
+
+              {amenities.length > 8 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllAmenities((val) => !val)}
+                  className="text-xs font-semibold text-[#B88428] hover:text-[#976a1c] cursor-pointer"
+                >
+                  {showAllAmenities ? "Show fewer" : `View all (${amenities.length})`}
+                </button>
+              )}
+            </div>
+
+            {amenities.length === 0 ? (
+              <p className="text-xs text-neutral-500 italic py-2">Standard Starlight guest room amenities included.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                {(showAllAmenities ? amenities : amenities.slice(0, 8)).map((amenity) => {
+                  const Icon = getAmenityIcon(amenity.icon);
+                  return (
+                    <div
+                      key={amenity.id}
+                      className="flex items-center gap-2.5 rounded-xl border border-neutral-200/70 bg-[#FAFAFA] p-3 text-xs text-neutral-700 transition-colors hover:border-[#D7A441]/40 hover:bg-amber-50/20"
+                    >
+                      <Icon size={16} className="text-[#D7A441] shrink-0" />
+                      <span className="font-medium truncate">{amenity.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+
+          {/* 4. ESSENTIAL HOSPITALITY POLICIES & GUIDELINES */}
+          <section
+            aria-label="Hotel Guidelines"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-3.5"
+          >
+            <div className="rounded-2xl border border-[#EAE6DF] bg-white p-4 sm:p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+              <div className="flex items-center gap-2.5 text-neutral-900 font-semibold text-xs mb-1.5">
+                <Clock size={16} className="text-[#D7A441] shrink-0" />
+                <span>Check-in &amp; Check-out</span>
+              </div>
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                Check-in starts from <strong>12:00 PM</strong>. Check-out is scheduled by <strong>11:00 AM</strong>. Early check-in subject to front-desk availability.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[#EAE6DF] bg-white p-4 sm:p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+              <div className="flex items-center gap-2.5 text-neutral-900 font-semibold text-xs mb-1.5">
+                <ShieldCheck size={16} className="text-[#D7A441] shrink-0" />
+                <span>Guest Verification</span>
+              </div>
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                A valid government-issued photo ID (Aadhaar, Passport, Voter ID or Driver's License) is required for each guest upon physical check-in.
+              </p>
+            </div>
+          </section>
+
+        </div>
+
+      </main>
 
       {/* GLOBAL FOOTER */}
       < Footer />

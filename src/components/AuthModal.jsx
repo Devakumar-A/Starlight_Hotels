@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 export default function AuthModal({
@@ -204,10 +205,10 @@ export default function AuthModal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
-              className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xl text-gray-500 transition hover:bg-black hover:text-white"
+              aria-label="Close dialog"
+              className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-900 hover:text-white cursor-pointer"
             >
-              ×
+              <X size={18} />
             </button>
 
             {/* Icon */}
@@ -397,10 +398,10 @@ export default function AuthModal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
-              className="absolute right-5 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xl text-gray-500 transition hover:bg-black hover:text-white"
+              aria-label="Close dialog"
+              className="absolute right-5 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-900 hover:text-white cursor-pointer"
             >
-              ×
+              <X size={18} />
             </button>
 
             {/* Mobile brand */}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import {
   User,
   Phone,
@@ -8,15 +8,17 @@ import {
   Calendar,
   LogOut,
   Compass,
+  BedDouble,
   Info,
   Headphones,
   Sparkles,
   ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
-import AuthModal from "./AuthModal";
-import { supabase } from "../lib/supabase";
-import { Link, useLocation } from "react-router-dom";
-import starlightLogo from "../assets/brand/starlight-logo.png";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import starlightLogo from "../assets/brand/starlight-logo-90.webp";
+
+const AuthModal = lazy(() => import("./AuthModal"));
 
 export default function Navbar() {
   const [authMode, setAuthMode] = useState(null);
@@ -28,7 +30,16 @@ export default function Navbar() {
   const userMenuRef = useRef(null);
   const mobileUserMenuRef = useRef(null);
   const routerLocation = useLocation();
+  const navigate = useNavigate();
   const isHome = routerLocation.pathname === "/";
+
+  const handleGoBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
 
   // Listen to scroll position for smooth background transition on home page
   useEffect(() => {
@@ -60,19 +71,62 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Supabase Auth session management
+  // Supabase Auth session management (deferred to idle to unblock first paint)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-    });
+    let unsubscribe = () => {};
+    let isMounted = true;
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    const initAuth = async () => {
+      try {
+        const { supabase } = await import("../lib/supabase");
+        if (!isMounted) return;
 
-    return () => subscription.unsubscribe();
+        const { data } = await supabase.auth.getSession();
+        if (isMounted) {
+          setUser(data.session?.user ?? null);
+        }
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (isMounted) {
+            setUser(session?.user ?? null);
+          }
+        });
+
+        unsubscribe = () => subscription.unsubscribe();
+      } catch (err) {
+        console.error("Auth init error:", err);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      if ("requestIdleCallback" in window) {
+        const handle = requestIdleCallback(() => initAuth(), { timeout: 2000 });
+        return () => {
+          isMounted = false;
+          cancelIdleCallback(handle);
+          unsubscribe();
+        };
+      } else {
+        const timer = setTimeout(initAuth, 50);
+        return () => {
+          isMounted = false;
+          clearTimeout(timer);
+          unsubscribe();
+        };
+      }
+    }
+  }, []);
+
+  // Listen for global open-auth event (e.g. from promotional modal)
+  useEffect(() => {
+    const handleOpenAuth = (e) => {
+      const mode = e?.detail?.mode || "login";
+      setAuthMode(mode);
+    };
+    window.addEventListener("starlight:open-auth", handleOpenAuth);
+    return () => window.removeEventListener("starlight:open-auth", handleOpenAuth);
   }, []);
 
   const displayName =
@@ -81,7 +135,12 @@ export default function Navbar() {
     "User";
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { supabase } = await import("../lib/supabase");
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore
+    }
     setUserMenuOpen(false);
     setMobileMenuOpen(false);
     window.location.href = "/";
@@ -121,7 +180,9 @@ export default function Navbar() {
             <div className="relative flex items-center justify-center shrink-0">
               <img
                 src={starlightLogo}
-                alt="Starlight Hotels Emblem"
+                alt=""
+                width={40}
+                height={40}
                 className="h-7 w-7 sm:h-9 sm:w-9 lg:h-10 lg:w-10 object-contain drop-shadow transition-transform duration-300 group-hover:scale-105"
               />
               <div className="absolute inset-0 rounded-full bg-[#D4A247]/20 blur-md -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -202,7 +263,7 @@ export default function Navbar() {
 
             {/* Customer Support */}
             <a
-              href="mailto:support@starlighthotels.com"
+              href="mailto:info@starlighthotels.in"
               className="flex items-center gap-1.5 text-xs xl:text-[13px] font-medium text-white/70 hover:text-white transition-colors px-2 py-1.5 whitespace-nowrap"
               title="24/7 Guest Care & Support"
             >
@@ -401,104 +462,90 @@ export default function Navbar() {
         {mobileMenuOpen && (
           <>
             <div
-              className="lg:hidden fixed inset-0 bg-black/70 backdrop-blur-xs z-30"
+              className="lg:hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-30"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <div className="lg:hidden absolute left-0 right-0 top-full bg-[#0c101c]/98 backdrop-blur-2xl border-b border-[#D4A247]/30 shadow-[0_30px_70px_rgba(0,0,0,0.85)] px-4 sm:px-6 py-4 sm:py-5 space-y-3.5 max-h-[calc(100dvh-70px)] overflow-y-auto z-40 animate-in slide-in-from-top-2 duration-200 text-white">
+            <div className="lg:hidden absolute left-0 right-0 top-full bg-[#0B0E14]/98 backdrop-blur-2xl border-b border-[#D7A441]/25 shadow-[0_30px_70px_rgba(0,0,0,0.92)] px-4 sm:px-6 py-4 space-y-3.5 max-h-[calc(100dvh-70px)] overflow-y-auto z-40 animate-in slide-in-from-top-2 duration-200 text-white">
 
-              {/* Mobile Drawer Header with Explicit Close Button */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <img
-                    src={starlightLogo}
-                    alt="Starlight Hotels"
-                    className="h-5 w-5 object-contain"
-                  />
-                  <span className="text-xs font-bold tracking-[0.16em] text-white uppercase">
-                    Navigation Menu
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-1.5 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1.5 text-xs font-bold text-white border border-white/20 shadow-xs transition active:scale-95 cursor-pointer"
-                  aria-label="Close menu"
-                >
-                  <X size={15} className="text-[#D4A247]" />
-                  <span>Close</span>
-                </button>
-              </div>
-
-              {/* Direct Concierge Contact Card */}
-              <div className="rounded-2xl border border-[#D4A247]/35 bg-gradient-to-br from-[#D4A247]/20 via-[#131b2e]/90 to-[#0c101c] p-3.5 sm:p-4 shadow-inner">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-[10px] font-bold tracking-[0.18em] text-[#F3CF7A] uppercase">
-                      24/7 Concierge Desk
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-semibold text-white/50">Direct Reservations</span>
-                </div>
-                <a
-                  href="tel:+918270660904"
-                  className="flex items-center justify-between rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 p-2.5 sm:p-3 shadow-xs transition hover:border-[#D4A247] active:scale-98"
-                >
-                  <div className="flex items-center gap-2.5 sm:gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-[#D7A441] to-[#B88428] text-neutral-950 font-bold shadow-xs">
-                      <Phone size={15} />
+              {/* If User is Signed In: Compact Luxury Profile Card */}
+              {user && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 flex items-center justify-between gap-3 shadow-inner">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#D7A441] to-[#B88428] text-neutral-950 font-bold text-xs shadow-xs shrink-0">
+                      {displayName.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <div className="text-[11px] font-medium text-white/60 leading-none">Call direct</div>
-                      <div className="text-sm font-bold text-white mt-0.5 tracking-wide">
-                        +91 8270660904
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#D4A247]">Signed In</div>
+                      <div className="text-xs font-semibold text-white truncate">{user?.email}</div>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-[#F3CF7A] flex items-center gap-1">
-                    Call &rarr;
-                  </span>
-                </a>
-              </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Link
+                      to="/profile"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-medium text-white transition active:scale-95"
+                    >
+                      <User size={13} className="text-[#D4A247]" />
+                      <span>Profile</span>
+                    </Link>
+                    <Link
+                      to="/my-bookings"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-medium text-white transition active:scale-95"
+                    >
+                      <Calendar size={13} className="text-[#D4A247]" />
+                      <span>Bookings</span>
+                    </Link>
+                  </div>
+                </div>
+              )}
 
               {/* Main Navigation Links */}
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Link
                   to="/"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl transition ${
+                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${
                     isHome
-                      ? "bg-[#D4A247]/20 border border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
-                      : "text-white/80 hover:text-white hover:bg-white/[0.06] border border-transparent font-medium"
+                      ? "bg-gradient-to-r from-[#D4A247]/20 via-[#D4A247]/10 to-transparent border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
+                      : "bg-white/[0.03] hover:bg-white/[0.07] border-white/10 text-white/90 hover:text-white font-medium"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${isHome ? "bg-[#D4A247]/25 text-[#F3CF7A]" : "bg-white/10 text-white/60"}`}>
-                      <Compass size={15} />
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${isHome ? "bg-[#D4A247] text-neutral-950 shadow-xs" : "bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15"}`}>
+                      <Compass size={17} />
                     </div>
-                    <span className="text-sm tracking-wide">Home</span>
+                    <div>
+                      <span className="text-sm tracking-wide block leading-tight">Home</span>
+                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">Welcome to Starlight</span>
+                    </div>
                   </div>
-                  {isHome && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#D4A247]" />
+                  {isHome ? (
+                    <span className="h-2 w-2 rounded-full bg-[#D4A247] shadow-[0_0_8px_#D4A247]" />
+                  ) : (
+                    <ChevronRight size={15} className="text-white/30 group-hover:text-white/70 transition-transform group-hover:translate-x-0.5" />
                   )}
                 </Link>
 
                 <Link
                   to="/book-hotels"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl transition ${
+                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${
                     isBookActive
-                      ? "bg-[#D4A247]/20 border border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
-                      : "text-white/80 hover:text-white hover:bg-white/[0.06] border border-transparent font-medium"
+                      ? "bg-gradient-to-r from-[#D4A247]/20 via-[#D4A247]/10 to-transparent border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
+                      : "bg-white/[0.03] hover:bg-white/[0.07] border-white/10 text-white/90 hover:text-white font-medium"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${isBookActive ? "bg-[#D4A247]/25 text-[#F3CF7A]" : "bg-white/10 text-white/60"}`}>
-                      <Compass size={15} />
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${isBookActive ? "bg-[#D4A247] text-neutral-950 shadow-xs" : "bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15"}`}>
+                      <BedDouble size={17} />
                     </div>
-                    <span className="text-sm tracking-wide">Book Hotels</span>
+                    <div>
+                      <span className="text-sm tracking-wide block leading-tight">Book Hotels</span>
+                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">Explore luxury sanctuaries</span>
+                    </div>
                   </div>
-                  <span className="text-[10px] tracking-wider uppercase font-bold text-[#F3CF7A] bg-[#D4A247]/20 px-2 py-0.5 rounded-full border border-[#D4A247]/30">
+                  <span className="text-[10px] tracking-wider uppercase font-bold text-[#F3CF7A] bg-[#D4A247]/20 px-2.5 py-1 rounded-full border border-[#D4A247]/30">
                     Explore
                   </span>
                 </Link>
@@ -506,49 +553,73 @@ export default function Navbar() {
                 <Link
                   to="/about-us"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl transition ${
+                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${
                     isAboutActive
-                      ? "bg-[#D4A247]/20 border border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
-                      : "text-white/80 hover:text-white hover:bg-white/[0.06] border border-transparent font-medium"
+                      ? "bg-gradient-to-r from-[#D4A247]/20 via-[#D4A247]/10 to-transparent border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
+                      : "bg-white/[0.03] hover:bg-white/[0.07] border-white/10 text-white/90 hover:text-white font-medium"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${isAboutActive ? "bg-[#D4A247]/25 text-[#F3CF7A]" : "bg-white/10 text-white/60"}`}>
-                      <Info size={15} />
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${isAboutActive ? "bg-[#D4A247] text-neutral-950 shadow-xs" : "bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15"}`}>
+                      <Info size={17} />
                     </div>
-                    <span className="text-sm tracking-wide">About Us &amp; Partners</span>
+                    <div>
+                      <span className="text-sm tracking-wide block leading-tight">About Us &amp; Partners</span>
+                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">Heritage &amp; Hospitality</span>
+                    </div>
                   </div>
-                  <ChevronRight size={15} className="text-white/40" />
+                  <ChevronRight size={15} className="text-white/30 group-hover:text-white/70 transition-transform group-hover:translate-x-0.5" />
                 </Link>
 
                 <a
-                  href="mailto:support@starlighthotels.com"
-                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-white/80 hover:text-white hover:bg-white/[0.06] border border-transparent transition font-medium"
+                  href="mailto:info@starlighthotels.in"
+                  className="group flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/90 hover:text-white transition-all active:scale-[0.99] font-medium"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white/60">
-                      <Headphones size={15} />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15 transition">
+                      <Headphones size={17} />
                     </div>
-                    <span className="text-sm tracking-wide">Customer Support</span>
+                    <div>
+                      <span className="text-sm tracking-wide block leading-tight">Customer Support</span>
+                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">info@starlighthotels.in</span>
+                    </div>
                   </div>
-                  <span className="text-[11px] font-semibold text-white/40">24/7 Care</span>
+                  <span className="text-[10px] font-bold text-white/60 bg-white/10 px-2.5 py-1 rounded-md">
+                    24/7 Care
+                  </span>
                 </a>
               </div>
 
-
               {/* Mobile Auth CTA if guest */}
               {!user && (
-                <div className="pt-1">
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       setAuthMode("login");
                     }}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#E3B85D] via-[#D4A247] to-[#B88428] py-3 text-sm font-bold text-neutral-950 shadow-lg shadow-[#D4A247]/25 transition active:scale-98"
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#E3B85D] via-[#D4A247] to-[#B88428] py-3.5 px-4 text-sm font-bold text-neutral-950 shadow-[0_4px_22px_rgba(215,164,65,0.35)] hover:brightness-105 active:scale-[0.99] transition cursor-pointer"
                   >
-                    <Sparkles size={16} />
+                    <Sparkles size={16} className="text-neutral-950" />
                     <span>Sign In / Create Account</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Logout button at bottom if logged in */}
+              {user && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-rose-400 hover:text-rose-300 transition cursor-pointer rounded-xl bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20"
+                  >
+                    <LogOut size={14} />
+                    <span>Sign Out</span>
                   </button>
                 </div>
               )}
@@ -557,13 +628,15 @@ export default function Navbar() {
         )}
       </header>
 
-      {/* Authentication Modal */}
+      {/* Authentication Modal (Lazy loaded) */}
       {authMode && (
-        <AuthModal
-          mode={authMode}
-          onClose={() => setAuthMode(null)}
-          onSwitch={(mode) => setAuthMode(mode)}
-        />
+        <Suspense fallback={null}>
+          <AuthModal
+            mode={authMode}
+            onClose={() => setAuthMode(null)}
+            onSwitch={(mode) => setAuthMode(mode)}
+          />
+        </Suspense>
       )}
     </>
   );

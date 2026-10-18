@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowUp,
   Check,
   ChevronRight,
@@ -20,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import starLogo from "../assets/brand/starlight-favicon.png";
 import Footer from "../components/layout/Footer";
 
@@ -63,6 +64,15 @@ export default function PrivacyPolicy() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleGoBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
 
   // Scroll to top upon opening or route changes
   useEffect(() => {
@@ -440,6 +450,18 @@ export default function PrivacyPolicy() {
 
         <div className="relative mx-auto max-w-[1400px] w-full px-4 sm:px-6 lg:px-12 py-7 sm:py-12 lg:py-16">
           <div className="max-w-3xl">
+            {/* Back Button */}
+            <button
+              type="button"
+              onClick={handleGoBack}
+              aria-label="Go back"
+              title="Go back"
+              className="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 hover:border-[#D7A441]/60 text-white/80 hover:text-white px-3.5 py-1.5 text-xs sm:text-sm font-medium backdrop-blur-md transition-all active:scale-95 cursor-pointer mb-5"
+            >
+              <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1 text-[#D7A441]" />
+              <span>Back</span>
+            </button>
+
             <h1 className="text-2xl sm:text-4xl lg:text-5xl font-serif font-normal text-white tracking-tight leading-[1.2] break-words">
               Privacy Policy
             </h1>
@@ -2196,7 +2218,7 @@ export default function PrivacyPolicy() {
       {/* Floating Action Buttons (Right, Screen Only) */}
       <aside
         aria-label="Quick contact and navigation"
-        className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-center gap-2.5 sm:gap-3 print-hide"
+        className="fixed bottom-7 right-4 sm:bottom-9 sm:right-6 z-40 flex flex-col items-center gap-2.5 sm:gap-3 print-hide"
       >
         {showBackToTop && (
           <button

@@ -9,11 +9,20 @@ import {
 
 import Hero from "../components/Hero";
 import Footer from "../components/Footer";
-import { getHotels, getHotelMedia } from "../services/hotelService";
+import { getHotels, getHotelsMedia } from "../services/hotelService";
+import { cldUrl, cldSrcSet } from "../lib/cloudinary";
 
-import chennaiImg from "../assets/hero/chennai/Chennai_01.png";
-import kodaikanalImg from "../assets/hero/kodaikanal/kodaikanal_01.png";
-import pondicherryImg from "../assets/hero/pondicherry/Pondicherry_01.png";
+import chennaiImg from "../assets/hero/chennai/Chennai_01.webp";
+import chennaiImg480 from "../assets/hero/chennai/Chennai_01-480.webp";
+import chennaiImg768 from "../assets/hero/chennai/Chennai_01-768.webp";
+
+import kodaikanalImg from "../assets/hero/kodaikanal/kodaikanal_01.webp";
+import kodaikanalImg480 from "../assets/hero/kodaikanal/kodaikanal_01-480.webp";
+import kodaikanalImg768 from "../assets/hero/kodaikanal/kodaikanal_01-768.webp";
+
+import pondicherryImg from "../assets/hero/pondicherry/Pondicherry_01.webp";
+import pondicherryImg480 from "../assets/hero/pondicherry/Pondicherry_01-480.webp";
+import pondicherryImg768 from "../assets/hero/pondicherry/Pondicherry_01-768.webp";
 
 /* =====================================================
     MOBILE SWIPEABLE FEATURES (Single row, snap scroll)
@@ -58,8 +67,8 @@ function MobileDeck({ features }) {
 
             {/* Header row */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold tracking-widest text-[#B88428]">{item.number}</span>
-              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-0.5 text-[11px] font-medium text-neutral-500">
+              <span className="text-xs font-bold tracking-widest text-[#8A5C14]">{item.number}</span>
+              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-0.5 text-[11px] font-medium text-neutral-600">
                 0{idx + 1} / 0{features.length}
               </span>
             </div>
@@ -73,7 +82,7 @@ function MobileDeck({ features }) {
             {/* Bottom accent */}
             <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
               <div className="h-1 w-10 rounded-full bg-gradient-to-r from-[#D7A441] to-[#C5922C]" />
-              <span className="text-[11px] text-neutral-400 font-medium">Starlight Experience</span>
+              <span className="text-[11px] text-neutral-500 font-medium">Starlight Experience</span>
             </div>
           </div>
         ))}
@@ -87,14 +96,18 @@ function MobileDeck({ features }) {
               key={i}
               type="button"
               onClick={() => scrollTo(i)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                activeIndex === i ? "w-6 bg-[#D7A441]" : "w-2 bg-neutral-300"
-              }`}
+              className="relative flex items-center justify-center p-3 -m-1.5 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D7A441]"
               aria-label={`Go to feature ${i + 1}`}
-            />
+            >
+              <span
+                className={`h-1.5 rounded-full transition-all duration-300 pointer-events-none ${
+                  activeIndex === i ? "w-6 bg-[#D7A441]" : "w-2 bg-neutral-300"
+                }`}
+              />
+            </button>
           ))}
         </div>
-        <span className="text-[11px] font-medium text-neutral-400 flex items-center gap-1">
+        <span className="text-[11px] font-medium text-neutral-700 flex items-center gap-1">
           Swipe to see all &rarr;
         </span>
       </div>
@@ -163,21 +176,14 @@ function Home() {
         const data = await getHotels();
         setHotels(data || []);
 
-        // Load media asynchronously
+        // Load media asynchronously in a single batch query
         try {
-          const mediaResults = await Promise.all(
-            (data || []).map(async (hotel) => {
-              const media = await getHotelMedia(hotel.id);
-              return {
-                hotelId: hotel.id,
-                image: media[0]?.cloudinary_url || null,
-              };
-            })
-          );
+          const hotelIds = (data || []).map((hotel) => hotel.id);
+          const mediaMap = await getHotelsMedia(hotelIds);
 
           const imageMap = {};
-          mediaResults.forEach((item) => {
-            imageMap[item.hotelId] = item.image;
+          hotelIds.forEach((id) => {
+            imageMap[id] = mediaMap[id]?.[0]?.cloudinary_url || null;
           });
           setHotelImages(imageMap);
         } catch (mediaErr) {
@@ -305,8 +311,14 @@ function Home() {
                         <div className="relative flex h-52 sm:h-56 w-full items-center justify-center border-b border-neutral-100 bg-neutral-100/70 overflow-hidden">
                           {imageUrl ? (
                             <img
-                              src={imageUrl}
+                              src={cldUrl(imageUrl, 400)}
+                              srcSet={cldSrcSet(imageUrl, [360, 480, 720, 1080])}
+                              sizes="(max-width: 640px) 84vw, (max-width: 1024px) 45vw, 380px"
                               alt={hotel.hotel_name}
+                              loading="lazy"
+                              decoding="async"
+                              width={400}
+                              height={224}
                               className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                             />
                           ) : (
@@ -342,6 +354,7 @@ function Home() {
                           <div className="mt-6 flex gap-2.5 sm:gap-3">
                             <Link
                               to={`/hotel/${hotel.id}`}
+                              aria-label={`Explore ${hotel.hotel_name}`}
                               className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-neutral-300 bg-neutral-50/50 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-neutral-800 transition-all duration-300 hover:border-neutral-400 hover:bg-white active:scale-95 text-center min-w-0 shadow-2xs"
                             >
                               Explore
@@ -349,6 +362,7 @@ function Home() {
 
                             <Link
                               to={`/book-hotels?hotel=${hotel.id}`}
+                              aria-label={`See availability for ${hotel.hotel_name}`}
                               className="flex flex-1 cursor-pointer items-center justify-center rounded-xl bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-neutral-950 shadow-[0_4px_16px_rgba(215,164,65,0.3)] transition-all duration-300 hover:brightness-105 hover:shadow-[0_6px_22px_rgba(215,164,65,0.45)] active:scale-95 text-center min-w-0"
                             >
                               See Availability
@@ -423,18 +437,21 @@ function Home() {
                 param: "Chennai",
                 description: "Explore the vibrant city, beaches and cultural landmarks.",
                 image: chennaiImg,
+                srcSet: `${chennaiImg480} 480w, ${chennaiImg768} 768w, ${chennaiImg} 1672w`,
               },
               {
                 city: "Kodaikanal",
                 param: "Kodaikanal",
                 description: "Discover cool mountain air, forests and peaceful landscapes.",
                 image: kodaikanalImg,
+                srcSet: `${kodaikanalImg480} 480w, ${kodaikanalImg768} 768w, ${kodaikanalImg} 1672w`,
               },
               {
                 city: "Pondicherry",
                 param: "Pondicherry",
                 description: "Experience coastal streets, cafés and French-inspired charm.",
                 image: pondicherryImg,
+                srcSet: `${pondicherryImg480} 480w, ${pondicherryImg768} 768w, ${pondicherryImg} 1672w`,
               },
             ].map((dest, idx) => (
               <Link
@@ -453,7 +470,13 @@ function Home() {
                 <div className="relative h-48 sm:h-52 w-full overflow-hidden border-b border-neutral-100 bg-neutral-100">
                   <img
                     src={dest.image}
+                    srcSet={dest.srcSet}
+                    sizes="(max-width: 640px) 80vw, (max-width: 1024px) 45vw, 380px"
                     alt={dest.city}
+                    loading="lazy"
+                    decoding="async"
+                    width={380}
+                    height={208}
                     className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
@@ -473,7 +496,7 @@ function Home() {
                 {/* Card Info */}
                 <div className="p-5 sm:p-6 flex flex-col justify-between flex-1">
                   <div>
-                    <h3 className="text-lg sm:text-xl font-semibold text-neutral-900 transition-colors duration-300 group-hover:text-[#B88428]">
+                    <h3 className="text-lg sm:text-xl font-semibold text-neutral-900 transition-colors duration-300 group-hover:text-[#8A5C14]">
                       {dest.city}
                     </h3>
 
@@ -482,7 +505,7 @@ function Home() {
                     </p>
                   </div>
 
-                  <div className="mt-5 flex items-center gap-1.5 text-xs font-semibold text-[#B88428] transition-transform duration-300 group-hover:translate-x-1 group-hover:text-[#9B111E]">
+                  <div className="mt-5 flex items-center gap-1.5 text-xs font-semibold text-[#8A5C14] transition-transform duration-300 group-hover:translate-x-1 group-hover:text-[#9B111E]">
                     <span>Explore stays in {dest.city}</span>
                     <ArrowRight size={14} />
                   </div>
@@ -565,7 +588,7 @@ function Home() {
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#D7A441]/0 to-transparent transition-all duration-700 ease-out group-hover:via-[#D7A441]/70" />
 
                 <div>
-                  <span className="text-xs font-bold tracking-widest text-[#B88428] transition-all duration-300 group-hover:text-[#D7A441] group-hover:tracking-[0.25em]">
+                  <span className="text-xs font-bold tracking-widest text-[#8A5C14] transition-all duration-300 group-hover:text-[#D7A441] group-hover:tracking-[0.25em]">
                     {item.number}
                   </span>
 
