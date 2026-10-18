@@ -2,48 +2,124 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/starlight-favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Starlight Hotels | Luxury Stays &amp; Resorts in South India</title>
     <meta
       name="description"
-      content="Discover handpicked luxury hotels, boutique stays, and resorts across Chennai, Pondicherry, and Kodaikanal. Book directly with Starlight Hotels for exclusive member rates."
+      content="Discover handpicked luxury hotels, boutique stays, and hillside resorts across Chennai, Pondicherry, and Kodaikanal. Book direct with Starlight Hotels."
     />
-    <meta name="theme-color" content="#FAF9F6" />
-    <link rel="canonical" href="https://starlighthotels.in/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#0A0A0B" />
+    <meta name="author" content="Devakumar A, COGNOLYNX" />
+    <link rel="author" href="/humans.txt" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="LLMs" />
+
+    <!-- Icons & Web Manifest -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
 
     <!-- Open Graph & Social Meta Tags -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Starlight Hotels" />
+    <meta property="og:locale" content="en_IN" />
     <meta property="og:title" content="Starlight Hotels | Luxury Stays &amp; Resorts in South India" />
     <meta
       property="og:description"
-      content="Discover handpicked luxury hotels, boutique stays, and resorts across Chennai, Pondicherry, and Kodaikanal."
+      content="Discover handpicked luxury hotels, boutique stays, and hillside resorts across Chennai, Pondicherry, and Kodaikanal. Book direct with Starlight Hotels."
     />
-    <meta property="og:url" content="https://starlighthotels.in/" />
-    <meta property="og:image" content="https://starlighthotels.in/starlight-favicon.png" />
+    <meta property="og:image" content="https://starlighthotels.in/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Starlight Hotels - Luxury Stays &amp; Resorts" />
+
+    <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Starlight Hotels | Luxury Stays &amp; Resorts in South India" />
     <meta
       name="twitter:description"
-      content="Discover handpicked luxury hotels, boutique stays, and resorts across Chennai, Pondicherry, and Kodaikanal."
+      content="Discover handpicked luxury hotels, boutique stays, and hillside resorts across Chennai, Pondicherry, and Kodaikanal. Book direct with Starlight Hotels."
     />
-    <meta name="twitter:image" content="https://starlighthotels.in/starlight-favicon.png" />
+    <meta name="twitter:image" content="https://starlighthotels.in/og-image.jpg" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://starlighthotels.in/#organization",
+            "name": "Starlight Hotels",
+            "url": "https://starlighthotels.in",
+            "logo": {
+              "@type": "ImageObject",
+              "@id": "https://starlighthotels.in/#logo",
+              "url": "https://starlighthotels.in/starlight-favicon.png",
+              "caption": "Starlight Hotels Logo"
+            },
+            "contactPoint": [
+              {
+                "@type": "ContactPoint",
+                "telephone": "+91-8270660904",
+                "contactType": "reservations",
+                "email": "info@starlighthotels.in"
+              }
+            ],
+            "sameAs": [
+              "https://www.instagram.com/starlight.hotels_/",
+              "https://www.facebook.com/share/1CkRb3XHkv/",
+              "https://youtube.com/@starlighthotelsoffice"
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://starlighthotels.in/#website",
+            "name": "Starlight Hotels",
+            "url": "https://starlighthotels.in",
+            "publisher": {
+              "@id": "https://starlighthotels.in/#organization"
+            },
+            "creator": {
+              "@type": "Person",
+              "name": "Devakumar A",
+              "url": "https://cognolynx.com",
+              "sameAs": [
+                "https://github.com/Devakumar-A",
+                "https://orcid.org/0009-0003-8934-6744",
+                "https://www.linkedin.com/in/devakumar-a-129561305/"
+              ],
+              "worksFor": {
+                "@type": "Organization",
+                "name": "COGNOLYNX",
+                "url": "https://cognolynx.com"
+              }
+            }
+          }
+        ]
+      }
+    </script>
 
     <!-- Key Origin Preconnects (Max 3) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://res.cloudinary.com" />
     <link rel="preconnect" href="https://useiefsdsvidgkvrtfsj.supabase.co" />
 
-    <!-- Preload Hero LCP Image -->
-    <link
-      rel="preload"
-      as="image"
-      href="/hero/chennai_04-768w.webp"
-      imagesrcset="/hero/chennai_04-480w.webp 480w, /hero/chennai_04-768w.webp 768w, /hero/chennai_04-1200w.webp 1200w, /hero/chennai_04-1672w.webp 1672w"
-      imagesizes="100vw"
-      fetchpriority="high"
-      type="image/webp"
-    />
+    <!-- Preload Hero LCP Image (Home Page Only) -->
+    <script>
+      if (window.location.pathname === "/" || window.location.pathname === "") {
+        const link = document.createElement("link");
+        link.rel = "preload";
+        link.as = "image";
+        link.href = "/hero/chennai_04-768w.webp";
+        link.imageSrcset = "/hero/chennai_04-480w.webp 480w, /hero/chennai_04-768w.webp 768w, /hero/chennai_04-1200w.webp 1200w, /hero/chennai_04-1672w.webp 1672w";
+        link.imageSizes = "100vw";
+        link.fetchPriority = "high";
+        link.type = "image/webp";
+        document.head.appendChild(link);
+      }
+    </script>
 
     <!-- Non-Blocking Google Fonts with Fallback -->
     <link

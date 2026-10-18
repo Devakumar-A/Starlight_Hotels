@@ -57,6 +57,7 @@ import {
 } from "../services/hotelService";
 
 import Footer from "../components/Footer";
+import { setSeo, clearPageJsonLd } from "../lib/seo";
 
 // Deterministic proprietary Starlight Guest Rating (4.5 to 5.0)
 function getStarlightRating(id) {
@@ -718,6 +719,83 @@ function HotelDetails() {
       null
     );
   }, [media, images]);
+
+  // =======================================================
+  // HOTEL SEO & STRUCTURED DATA
+  // =======================================================
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!hotel || error) {
+      setSeo({
+        title: "Hotel Not Found | Starlight Hotels",
+        description:
+          "The requested destination or hotel could not be located. Explore luxury boutique hotels and hillside resorts across Chennai, Pondicherry, and Kodaikanal.",
+        noindex: true,
+        canonicalPath: null,
+        jsonLd: null,
+      });
+      return;
+    }
+
+    const firstPhoto =
+      priorityImage ||
+      images[0]?.cloudinary_url ||
+      "https://starlighthotels.in/og-image.jpg";
+
+    const fallbackDesc = `Experience ${hotel.hotel_name} in ${hotel.city}. Book directly with Starlight Hotels for comfortable, premium accommodations in South India.`;
+    const fullDesc = (hotel.description || "").trim() || fallbackDesc;
+
+    // Trim to at most 155 characters at a word boundary, adding "…" only if actually shortened
+    let metaDesc = fullDesc;
+    if (fullDesc.length > 155) {
+      const truncated = fullDesc.slice(0, 154);
+      const lastSpace = truncated.lastIndexOf(" ");
+      const base = lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated;
+      metaDesc = base.trimEnd().replace(/[.,;:!?\s]+$/, "") + "…";
+    }
+
+    // Use "{hotel name} | Starlight Hotels" only if name does not already contain "Starlight Hotels"
+    const hotelTitle = hotel.hotel_name.includes("Starlight Hotels")
+      ? hotel.hotel_name
+      : `${hotel.hotel_name} | Starlight Hotels`;
+
+    const hotelJsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Hotel",
+      name: hotel.hotel_name,
+      description: fullDesc,
+      url: `https://starlighthotels.in/hotel/${hotel.id || hotelId}`,
+      image: firstPhoto,
+      telephone: "+91-8270660904",
+      ...(hotel.address || hotel.city
+        ? {
+            address: {
+              "@type": "PostalAddress",
+              ...(hotel.address ? { streetAddress: hotel.address } : {}),
+              ...(hotel.city ? { addressLocality: hotel.city } : {}),
+              addressCountry: "IN",
+            },
+          }
+        : {}),
+    };
+
+    setSeo({
+      title: hotelTitle,
+      description: metaDesc,
+      canonicalPath: `/hotel/${hotel.id || hotelId}`,
+      image: firstPhoto,
+      type: "website",
+      jsonLd: hotelJsonLd,
+    });
+  }, [hotel, priorityImage, images, loading, error, hotelId]);
+
+  useEffect(() => {
+    return () => {
+      clearPageJsonLd();
+    };
+  }, []);
 
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);

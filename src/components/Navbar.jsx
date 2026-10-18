@@ -517,7 +517,7 @@ export default function Navbar() {
                     </div>
                     <div>
                       <span className="text-sm tracking-wide block leading-tight">Home</span>
-                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">Welcome to Starlight</span>
+                      <span className="text-[11px] text-white/70 block font-normal mt-0.5">Welcome to Starlight</span>
                     </div>
                   </div>
                   {isHome ? (
@@ -542,7 +542,7 @@ export default function Navbar() {
                     </div>
                     <div>
                       <span className="text-sm tracking-wide block leading-tight">Book Hotels</span>
-                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">Explore luxury sanctuaries</span>
+                      <span className="text-[11px] text-white/70 block font-normal mt-0.5">Explore luxury sanctuaries</span>
                     </div>
                   </div>
                   <span className="text-[10px] tracking-wider uppercase font-bold text-[#F3CF7A] bg-[#D4A247]/20 px-2.5 py-1 rounded-full border border-[#D4A247]/30">
@@ -565,7 +565,7 @@ export default function Navbar() {
                     </div>
                     <div>
                       <span className="text-sm tracking-wide block leading-tight">About Us &amp; Partners</span>
-                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">Heritage &amp; Hospitality</span>
+                      <span className="text-[11px] text-white/70 block font-normal mt-0.5">Heritage &amp; Hospitality</span>
                     </div>
                   </div>
                   <ChevronRight size={15} className="text-white/30 group-hover:text-white/70 transition-transform group-hover:translate-x-0.5" />
@@ -581,7 +581,7 @@ export default function Navbar() {
                     </div>
                     <div>
                       <span className="text-sm tracking-wide block leading-tight">Customer Support</span>
-                      <span className="text-[11px] text-white/40 block font-normal mt-0.5">info@starlighthotels.in</span>
+                      <span className="text-[11px] text-white/70 block font-normal mt-0.5">info@starlighthotels.in</span>
                     </div>
                   </div>
                   <span className="text-[10px] font-bold text-white/60 bg-white/10 px-2.5 py-1 rounded-md">

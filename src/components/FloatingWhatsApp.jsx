@@ -168,6 +168,7 @@ export default function FloatingWhatsApp() {
           href="https://wa.me/918270660904"
           target="_blank"
           rel="noreferrer"
+          aria-label="Chat on WhatsApp"
           className="group relative flex items-center justify-between w-[150px] sm:w-[190px] h-[34px] sm:h-[42px] px-2 sm:px-3 rounded-full bg-gradient-to-r from-[#0E6C32] via-[#0B5C2A] to-[#084920] border-[1.5px] border-[#25D366]/50 shadow-[0_6px_20px_rgba(0,0,0,0.7),0_0_12px_rgba(37,211,102,0.2)] hover:shadow-[0_8px_25px_rgba(37,211,102,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-300 text-left focus:outline-none focus:ring-2 focus:ring-[#25D366] cursor-pointer select-none"
         >
           {/* Left: 3D WhatsApp Green Coin */}

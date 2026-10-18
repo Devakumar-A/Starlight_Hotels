@@ -9,7 +9,6 @@ import {
 
 import Hero from "../components/Hero";
 import Footer from "../components/Footer";
-import { getHotels, getHotelsMedia } from "../services/hotelService";
 import { cldUrl, cldSrcSet } from "../lib/cloudinary";
 
 import chennaiImg from "../assets/hero/chennai/Chennai_01.webp";
@@ -96,7 +95,7 @@ function MobileDeck({ features }) {
               key={i}
               type="button"
               onClick={() => scrollTo(i)}
-              className="relative flex items-center justify-center p-3 -m-1.5 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D7A441]"
+              className="relative flex items-center justify-center min-w-[24px] min-h-[24px] p-3 -m-1.5 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D7A441]"
               aria-label={`Go to feature ${i + 1}`}
             >
               <span
@@ -173,6 +172,7 @@ function Home() {
         setLoading(true);
         setError("");
 
+        const { getHotels, getHotelsMedia } = await import("../services/hotelService");
         const data = await getHotels();
         setHotels(data || []);
 

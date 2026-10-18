@@ -19,6 +19,15 @@
       ]
     },
     {
+      "source": "/site.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json; charset=utf-8"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -50,7 +59,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!robots\\.txt|humans\\.txt|llms\\.txt|sitemap\\.xml).*)",
+      "source": "/((?!robots\\.txt|humans\\.txt|llms\\.txt|sitemap\\.xml|site\\.webmanifest|.*\\.(?:ico|png|svg|webp|jpg|jpeg)).*)",
       "destination": "/index.html"
     }
   ]

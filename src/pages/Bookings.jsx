@@ -60,6 +60,7 @@ import { supabase } from "../lib/supabase";
 
 import AuthModal from "../components/AuthModal";
 import Footer from "../components/Footer";
+import { trackEvent, trackAdsConversion } from "../lib/analytics";
 
 
 function getTomorrowDate() {
@@ -197,6 +198,10 @@ function Bookings() {
 
   const calendarContainerRef = useRef(null);
   const guestsDropdownRef = useRef(null);
+  const guestInfoRef = useRef(null);
+  const termsCheckboxRef = useRef(null);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [termsError, setTermsError] = useState("");
 
   // Click outside listener for custom calendar & guests dropdown
   useEffect(() => {
@@ -980,9 +985,20 @@ function Bookings() {
 
   const handleBookNow = async () => {
     setBookingError("");
+    setTermsError("");
+
+    if (!termsAgreed) {
+      setTermsError("Please confirm guest details and agree to the Terms of Service and Privacy Policy.");
+      termsCheckboxRef.current?.focus();
+      return;
+    }
 
     if (!guestName.trim()) {
       setBookingError("Please enter the primary guest's full name.");
+      guestInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => {
+        document.getElementById("guest-full-name")?.focus();
+      }, 350);
       return;
     }
 
@@ -990,6 +1006,10 @@ function Bookings() {
 
     if (!/^\+?[0-9]{10,15}$/.test(cleanPhone)) {
       setBookingError("Please enter a valid mobile number.");
+      guestInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => {
+        document.getElementById("guest-phone-number")?.focus();
+      }, 350);
       return;
     }
 
@@ -998,6 +1018,7 @@ function Bookings() {
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
     ) {
       setBookingError("Please enter a valid email address.");
+      guestInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     try {
@@ -1031,6 +1052,7 @@ function Bookings() {
     } catch (error) {
       console.error("BOOKING ERROR:", error);
       setBookingError(error?.message || "Unable to continue booking.");
+      guestInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
 
@@ -1056,6 +1078,22 @@ function Bookings() {
       }
 
       setBookingConfirmation(result);
+
+      // Trigger analytics purchase event & Google Ads conversion (consent-gated)
+      try {
+        const transactionId = result.booking_reference || result.id || "";
+        const bookingValue = Number(result.total_amount || finalTotal || 0);
+
+        trackEvent("purchase", {
+          transaction_id: transactionId,
+          value: bookingValue,
+          currency: "INR",
+        });
+
+        trackAdsConversion(bookingValue, "INR", transactionId);
+      } catch (analyticsErr) {
+        console.warn("[Analytics] Booking event error:", analyticsErr);
+      }
 
       try {
         sessionStorage.removeItem(draftStorageKey);
@@ -1808,7 +1846,7 @@ function Bookings() {
 
                 {/* Sub-section: PRIMARY GUEST INFORMATION (Moved to Left Side) */}
                 <div className="border-t border-neutral-100 pt-5">
-                  <div className="rounded-2xl border border-neutral-200/90 bg-white p-5 sm:p-6 relative overflow-hidden shadow-xs">
+                  <div ref={guestInfoRef} className="rounded-2xl border border-neutral-200/90 bg-white p-5 sm:p-6 relative overflow-hidden shadow-xs">
                     {/* Decorative golden corner swoop */}
                     <div className="pointer-events-none absolute -top-8 -right-8 h-28 w-28 rounded-full bg-gradient-to-bl from-amber-200/60 via-amber-100/30 to-transparent" />
                     <div className="pointer-events-none absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-amber-300/50 rounded-tr-2xl" />
@@ -1822,6 +1860,13 @@ function Bookings() {
                         PRIMARY GUEST INFORMATION
                       </h4>
                     </div>
+
+                    {bookingError && (
+                      <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 border border-red-200/90 p-3 text-xs sm:text-sm text-red-700 animate-in fade-in slide-in-from-top-1 duration-200 relative z-10">
+                        <AlertCircle size={16} className="shrink-0 text-red-600" />
+                        <span className="font-semibold">{bookingError}</span>
+                      </div>
+                    )}
 
                     {/* Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
@@ -1998,11 +2043,61 @@ function Bookings() {
                   </div>
                 </div>
 
-                {/* 3. COMPLETE RESERVATION ACTION BUTTON */}
-                <div className="pt-2">
+                {/* 3. CONFIRMATION CHECKBOX & ACTION BUTTON */}
+                <div className="pt-3 space-y-3">
+                  <div className="rounded-xl border border-neutral-200/90 bg-[#FAF9F6] p-3 text-left">
+                    <label className="flex items-start gap-2.5 text-xs text-neutral-700 cursor-pointer select-none">
+                      <input
+                        ref={termsCheckboxRef}
+                        type="checkbox"
+                        id="booking-terms-consent"
+                        checked={termsAgreed}
+                        onChange={(e) => {
+                          setTermsAgreed(e.target.checked);
+                          if (e.target.checked) setTermsError("");
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 accent-neutral-900 shrink-0 cursor-pointer"
+                      />
+                      <span className="leading-relaxed">
+                        I confirm the guest details and agree to the{" "}
+                        <Link
+                          to="/terms"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-neutral-900 underline hover:text-[#9B111E]"
+                        >
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link
+                          to="/privacy"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-neutral-900 underline hover:text-[#9B111E]"
+                        >
+                          Privacy Policy
+                        </Link>
+                        .
+                      </span>
+                    </label>
+                    {termsError && (
+                      <p className="mt-1.5 text-xs text-red-600 font-medium pl-6">
+                        {termsError}
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleBookNow}
+                    aria-disabled={
+                      bookingLoading || occupancyLoading || !occupancy || !!occupancyError ||
+                      availableRooms <= 0 ||
+                      rooms > availableRooms ||
+                      nights <= 0 ||
+                      pricingLoading || !priceSummary ||
+                      !termsAgreed
+                    }
                     disabled={
                       bookingLoading || occupancyLoading || !occupancy || !!occupancyError ||
                       availableRooms <= 0 ||
@@ -2032,21 +2127,11 @@ function Bookings() {
                     </div>
                   )}
 
-                  {/* Guaranteed Trust & Terms - Guarantee shield directly inline before Guaranteed */}
-                  <div className="mt-3.5 text-center space-y-1.5">
+                  {/* Guaranteed Trust notice */}
+                  <div className="text-center pt-1">
                     <p className="text-xs text-neutral-600 max-w-sm mx-auto text-center leading-snug">
                       <ShieldCheck size={14} className="inline-block -mt-0.5 mr-1 text-neutral-500 align-middle shrink-0" />
                       <span>Guaranteed reservation with front-desk settlement.</span>
-                    </p>
-                    <p className="text-[11px] text-neutral-400 max-w-sm mx-auto leading-normal">
-                      By completing this booking, you agree to Starlight's{" "}
-                      <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-neutral-600 underline hover:text-neutral-900">
-                        Terms of Service
-                      </Link>{" "}
-                      and{" "}
-                      <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-neutral-600 underline hover:text-neutral-900">
-                        Privacy Policy
-                      </Link>.
                     </p>
                   </div>
                 </div>

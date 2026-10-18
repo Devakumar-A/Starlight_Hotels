@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -37,6 +38,8 @@ export default function AuthModal({
 
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [termsError, setTermsError] = useState("");
 
   const isSignup = mode === "signup";
 
@@ -74,6 +77,13 @@ export default function AuthModal({
     e.preventDefault();
 
     setMessage("");
+    setTermsError("");
+
+    if (isSignup && !termsChecked) {
+      setTermsError("Please agree to the Terms & Conditions and Privacy Policy to create an account.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -609,6 +619,50 @@ export default function AuthModal({
                   }`}
                 >
                   {message}
+                </div>
+              )}
+
+              {/* Signup Terms Checkbox */}
+              {isSignup && (
+                <div className="pt-1 pb-1">
+                  <label className="flex items-start gap-2.5 text-xs text-gray-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      id="signup-terms-consent"
+                      checked={termsChecked}
+                      onChange={(e) => {
+                        setTermsChecked(e.target.checked);
+                        if (e.target.checked) setTermsError("");
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#B88A3B] focus:ring-[#B88A3B] accent-[#B88A3B] shrink-0 cursor-pointer"
+                    />
+                    <span className="leading-relaxed">
+                      I agree to Starlight Hotels&apos;{" "}
+                      <Link
+                        to="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-[#151515] underline hover:text-[#9A6C27]"
+                      >
+                        Terms &amp; Conditions
+                      </Link>{" "}
+                      and{" "}
+                      <Link
+                        to="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-[#151515] underline hover:text-[#9A6C27]"
+                      >
+                        Privacy Policy
+                      </Link>
+                      .
+                    </span>
+                  </label>
+                  {termsError && (
+                    <p className="mt-1.5 text-xs text-red-600 font-medium pl-6">
+                      {termsError}
+                    </p>
+                  )}
                 </div>
               )}
 

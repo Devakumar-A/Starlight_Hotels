@@ -334,7 +334,11 @@ export async function calculateRoomPrice({
       occ.minimum_accommodation !== null &&
       occ.maximum_accommodation !== null
     ) {
-      isOccupancyConfigured = true;
+      const minAccom = Number(occ.minimum_accommodation) * (roomsRequested || 1);
+      const maxAccom = Number(occ.maximum_accommodation) * (roomsRequested || 1);
+      if (numberOfGuests >= minAccom && numberOfGuests <= maxAccom) {
+        isOccupancyConfigured = true;
+      }
     }
   } catch {
     isOccupancyConfigured = false;
@@ -501,6 +505,9 @@ export async function createBooking({
   checkOutDate,
   roomCategoryId,
   roomsRequested,
+  guestName,
+  guestPhone,
+  guestEmail,
 }) {
   const { data, error } = await supabase.rpc(
     "create_booking",
@@ -510,6 +517,9 @@ export async function createBooking({
       p_check_out_date: checkOutDate,
       p_room_category_id: roomCategoryId,
       p_rooms_requested: roomsRequested,
+      p_guest_name: guestName,
+      p_guest_phone: guestPhone,
+      p_guest_email: guestEmail,
     }
   );
 

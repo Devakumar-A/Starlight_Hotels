@@ -13,7 +13,7 @@ export default defineConfig({
   build: {
     target: "es2020",
     cssMinify: true,
-    sourcemap: "hidden",
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks(id) {

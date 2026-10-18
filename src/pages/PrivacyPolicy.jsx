@@ -1178,19 +1178,40 @@ export default function PrivacyPolicy() {
 
               <div className="space-y-3 sm:space-y-4 text-[13px] sm:text-[14px] md:text-[14.5px] leading-[1.7] sm:leading-[1.8] text-neutral-700 font-normal break-words [overflow-wrap:anywhere] min-w-0">
                 <p>
-                  Starlight Hotels may utilize cookies, local browser storage, and similar digital technologies to support website functionality. These technologies may serve purposes including:
+                  Starlight Hotels utilizes cookies, local browser storage, and similar digital technologies to deliver our hospitality services. We classify cookies into two categories:
                 </p>
 
-                <ul className="space-y-1.5 sm:space-y-2 list-disc pl-4 sm:pl-5 text-neutral-700">
-                  <li><strong>Essential Functionality:</strong> Maintaining user sessions, enabling room searches, and remembering selected booking dates;</li>
-                  <li><strong>Preferences:</strong> Retaining guest choices, display settings, and interface configurations;</li>
-                  <li><strong>Performance &amp; Reliability:</strong> Detecting system errors, balancing server load, and speeding up page load times;</li>
-                  <li><strong>Security:</strong> Safeguarding against fraudulent form submissions and automated bot traffic; and</li>
-                  <li><strong>Usage Insight:</strong> Understanding general site visitation patterns to improve website navigation and booking workflows.</li>
-                </ul>
+                <div className="space-y-3 pt-1">
+                  <div className="rounded-xl border border-neutral-200 bg-[#FAF9F6] p-3.5 sm:p-4.5">
+                    <h3 className="text-xs sm:text-sm font-serif font-bold text-neutral-900 mb-1.5">
+                      1. Essential Cookies &amp; Storage (Always Active)
+                    </h3>
+                    <p className="text-xs text-neutral-600 mb-2">
+                      Necessary for basic website security and booking functions. These cannot be disabled:
+                    </p>
+                    <ul className="space-y-1 list-disc pl-4 text-xs text-neutral-700">
+                      <li><strong>Session &amp; Security:</strong> Maintaining secure customer logins, protecting against CSRF attacks, and securing payment forms;</li>
+                      <li><strong>Reservation Workflow:</strong> Preserving selected room categories, reservation dates, and booking drafts across page transitions;</li>
+                      <li><strong>Infrastructure Reliability:</strong> Balancing server loads and caching essential layout assets.</li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-200 bg-[#FAF9F6] p-3.5 sm:p-4.5">
+                    <h3 className="text-xs sm:text-sm font-serif font-bold text-neutral-900 mb-1.5">
+                      2. Optional Cookies (Consent-Gated)
+                    </h3>
+                    <p className="text-xs text-neutral-600 mb-2">
+                      Activated only if you give affirmative consent via our Cookie Banner:
+                    </p>
+                    <ul className="space-y-1 list-disc pl-4 text-xs text-neutral-700">
+                      <li><strong>Usage Analytics:</strong> Understanding aggregate website traffic patterns, popular destinations, and navigation bottlenecks to enhance user experience;</li>
+                      <li><strong>Advertising &amp; Conversion Measurement:</strong> Measuring the effectiveness of promotional campaigns, tracking reservation conversion metrics, and, where enabled, supporting privacy-safe remarketing.</li>
+                    </ul>
+                  </div>
+                </div>
 
                 <p>
-                  Guests can control, restrict, or delete cookies through their browser settings or available preferences. Please note that disabling essential cookies may impact the proper functioning of certain website and booking features.
+                  <strong>Choice &amp; Control:</strong> Clicking &quot;Deny&quot; on our cookie banner ensures that no optional analytics or advertising scripts are loaded. You can change your preferences or revoke consent at any time by clicking <strong>&quot;Cookie settings&quot;</strong> in the website footer, or by adjusting your browser cookie settings.
                 </p>
               </div>
             </section>
@@ -1581,6 +1602,17 @@ export default function PrivacyPolicy() {
                 <p>
                   Third-party service providers process personal data on behalf of Starlight Hotels only for specified operational purposes and under our instructions.
                 </p>
+
+                <p>
+                  Our primary technology processors and sub-processors include:
+                </p>
+
+                <ul className="space-y-1.5 sm:space-y-2 list-disc pl-4 sm:pl-5 text-neutral-700 text-xs sm:text-sm">
+                  <li><strong>Supabase Inc.:</strong> User authentication infrastructure, user account credentials, and core hotel room reservation database management;</li>
+                  <li><strong>Cloudinary Inc.:</strong> Cloud media hosting, asset delivery, and image optimization for hotel property photographs;</li>
+                  <li><strong>Google LLC:</strong> Single Sign-On (Google OAuth), Google Web Fonts, and, exclusively when the visitor gives affirmative consent to optional cookies, Google Analytics 4 and Google Ads conversion measurement;</li>
+                  <li><strong>Meta Platforms / WhatsApp:</strong> Direct guest reservation inquiries, customer support messaging, and concierge communications.</li>
+                </ul>
 
                 <p>
                   Where appropriate, Starlight Hotels uses reasonable contractual, technical, or organizational measures to ensure that service providers maintain adequate confidentiality and handle information in compliance with applicable legal requirements.
@@ -2183,6 +2215,33 @@ export default function PrivacyPolicy() {
                       <span className="block text-[11px] text-neutral-500 mt-1">
                         Hotel Concierge &amp; General Support
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Statutory Data Fiduciary & Grievance Officer Details */}
+                  <div className="mt-4 pt-4 border-t border-neutral-200/80 space-y-3 text-xs sm:text-[13px] text-neutral-700">
+                    <div>
+                      <strong className="text-neutral-900 block font-semibold mb-0.5">
+                        Data Fiduciary:
+                      </strong>
+                      <span>
+                        Ilavarasan (Proprietor), trading as Starlight Hotels. Principal place of business: No. 50, Lenin Street, Kosapalayam, Puducherry - 605013, India.
+                      </span>
+                    </div>
+
+                    <div className="rounded-lg bg-white p-3 border border-neutral-200/80">
+                      <strong className="text-neutral-900 block font-semibold mb-1">
+                        Designated Grievance Redressal Officer:
+                      </strong>
+                      <p className="text-neutral-600 mb-1.5">
+                        <strong>Officer:</strong> Grievance Officer, Starlight Hotels (Ilavarasan, Proprietor)
+                      </p>
+                      <p className="text-neutral-600 mb-1.5">
+                        <strong>Email:</strong> <a href="mailto:info@starlighthotels.in" className="text-[#9B111E] underline font-medium">info@starlighthotels.in</a> &nbsp;|&nbsp; <strong>Phone:</strong> <a href="tel:+918270660904" className="text-[#9B111E] underline font-medium">+91 8270660904</a>
+                      </p>
+                      <p className="text-[11px] text-neutral-500 leading-relaxed">
+                        We acknowledge grievances within 24 hours and aim to resolve them within 30 days in compliance with the Digital Personal Data Protection Act and applicable Indian information technology rules.
+                      </p>
                     </div>
                   </div>
                 </div>

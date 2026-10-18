@@ -3,6 +3,7 @@ import { lazy, Suspense } from "react";
 
 import Navbar from "./components/Navbar";
 import ScrollToTop from "./components/ScrollToTop";
+import RouteSeo from "./components/RouteSeo";
 import Home from "./pages/Home";
 
 // Lazy-loaded route pages to keep initial bundle ultra-light
@@ -23,6 +24,8 @@ const PartnerWithUs = lazy(() => import("./pages/PartnerWithUs"));
 // Lazy-loaded interactive floating and promo elements
 const LoginOfferPromo = lazy(() => import("./components/LoginOfferPromo"));
 const FloatingWhatsApp = lazy(() => import("./components/FloatingWhatsApp"));
+const CookieConsent = lazy(() => import("./components/CookieConsent"));
+const AnalyticsListener = lazy(() => import("./components/AnalyticsListener"));
 
 function Login() {
   return <div className="p-10">Login Page</div>;
@@ -33,26 +36,31 @@ function Signup() {
 }
 
 function App() {
-  if (window.location.pathname === "/reset-password") {
-    return (
-      <Suspense fallback={<div className="min-h-screen bg-[#FAF9F6]" />}>
-        <ResetPassword />
-      </Suspense>
-    );
-  }
+  const isResetPassword = window.location.pathname === "/reset-password";
 
   return (
     <BrowserRouter>
-      <ScrollToTop />
-      <Navbar />
-
+      <RouteSeo />
       <Suspense fallback={null}>
-        <LoginOfferPromo delayMs={4500} />
-        <FloatingWhatsApp />
+        <AnalyticsListener />
       </Suspense>
+      {isResetPassword ? (
+        <Suspense fallback={<div className="min-h-screen bg-[#FAF9F6]" />}>
+          <ResetPassword />
+        </Suspense>
+      ) : (
+        <>
+          <ScrollToTop />
+          <Navbar />
 
-      <Suspense fallback={<div className="min-h-screen bg-[#FAF9F6]" />}>
-        <Routes>
+          <Suspense fallback={null}>
+            <LoginOfferPromo delayMs={4500} />
+            <FloatingWhatsApp />
+            <CookieConsent />
+          </Suspense>
+
+          <Suspense fallback={<div className="min-h-screen bg-[#FAF9F6]" />}>
+            <Routes>
           <Route path="/" element={<Home />} />
 
           <Route path="/book-hotels" element={<Availability />} />
@@ -96,6 +104,8 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
+        </>
+      )}
     </BrowserRouter>
   );
 }

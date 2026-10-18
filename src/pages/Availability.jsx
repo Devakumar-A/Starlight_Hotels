@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
-  Heart,
   LayoutGrid,
   List,
   MapPin,
@@ -167,17 +166,6 @@ function Availability() {
       return;
     }
     setViewMode("list");
-  };
-
-  const [favorites, setFavorites] = useState({});
-
-  const toggleFavorite = (id, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setFavorites((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
   };
 
   const [expandedRoomsByHotel, setExpandedRoomsByHotel] = useState({});
@@ -1157,19 +1145,6 @@ function Availability() {
                               </span>
                             </div>
                           )}
-
-                          {/* Favorite Heart Button */}
-                          <button
-                            type="button"
-                            onClick={(e) => toggleFavorite(hotel.id, e)}
-                            className="absolute top-3.5 right-3.5 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md border border-neutral-100 text-neutral-800 hover:text-red-500 hover:scale-105 transition cursor-pointer active:scale-95"
-                            aria-label={favorites[hotel.id] ? "Remove from favorites" : "Add to favorites"}
-                          >
-                            <Heart
-                              size={16}
-                              className={favorites[hotel.id] ? "fill-red-500 text-red-500" : "text-neutral-800"}
-                            />
-                          </button>
                         </div>
 
                         {/* 2. REAL HOTEL DETAILS & PRICING (Exact Reference Hierarchy) */}

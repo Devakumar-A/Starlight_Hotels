@@ -596,7 +596,7 @@ export default function Hero({ onSearch }) {
               key={idx}
               type="button"
               onClick={() => handleSelectSlide(idx)}
-              className="relative flex items-center justify-center p-3 -m-1.5 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D7A441]"
+              className="relative flex items-center justify-center min-w-[24px] min-h-[24px] p-3 -m-1.5 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D7A441]"
               aria-label={`Slide ${idx + 1}`}
             >
               <span
