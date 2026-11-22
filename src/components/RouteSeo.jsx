@@ -152,6 +152,13 @@ const ROUTE_SEO_MAP = {
       "View and manage your upcoming and completed hotel reservations with Starlight Hotels.",
     noindex: true,
   },
+  // Hourly Availability
+  "/hourly-availability": {
+    title: "Hourly Stay Availability | Starlight Hotels",
+    description:
+      "Find available hotels for hourly stays with Starlight Hotels.",
+    noindex: true,
+  },
   "/booking": {
     title: "Booking | Starlight Hotels",
     description:

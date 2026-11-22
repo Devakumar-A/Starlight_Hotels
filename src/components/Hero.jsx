@@ -13,6 +13,7 @@ import {
   ChevronUp,
   X,
   Minus,
+  Clock,
   Plus,
   Sparkles,
 } from "lucide-react";
@@ -87,7 +88,6 @@ const DESTINATIONS = [
     city: "Kodaikanal",
     queryValue: "Kodaikanal",
   },
-
   // ============================================================
   // PONDICHERRY HOTELS & STAYS (from Footer Directory)
   // ============================================================
@@ -221,6 +221,7 @@ const DESTINATIONS = [
   },
 ];
 
+
 function formatDateDisplay(dateStr) {
   if (!dateStr) return "Add Date";
   const [y, m, d] = dateStr.split("-");
@@ -238,7 +239,7 @@ function getFirstDayOfMonth(year, month) {
   return (day + 6) % 7;
 }
 
-export default function Hero({ onSearch }) {
+export default function Hero({ onSearch, stayType, setStayType }) {
   const navigate = useNavigate();
 
   // Background slideshow state - mount only slide 0 first to protect LCP, then progressive load
@@ -283,7 +284,7 @@ export default function Hero({ onSearch }) {
   const [checkOutDate, setCheckOutDate] = useState("");
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
-
+  const [hourlyStartTime, setHourlyStartTime] = useState("14:00");
   // Dropdown open states
   const [activeDropdown, setActiveDropdown] = useState(null); // 'location' | 'calendar' | 'guests' | null
   const [calendarTarget, setCalendarTarget] = useState("checkIn"); // 'checkIn' | 'checkOut'
@@ -328,48 +329,75 @@ export default function Hero({ onSearch }) {
 
   const totalGuests = adults + children;
 
+
   const handleSearchSubmit = (e) => {
     if (e) e.preventDefault();
+
     setActiveDropdown(null);
+
+    const params = new URLSearchParams();
 
     let finalLocation = selectedLocation;
     let finalHotelId = selectedHotelId;
 
-    // If user typed a hotel name or destination without explicitly clicking a dropdown item,
-    // match against properties/cities in DESTINATIONS
-    const inputTerm = (displayLocationName || locationSearchTerm || "").trim().toLowerCase();
+    // Resolve typed hotel or city names
+    const inputTerm = (
+      displayLocationName || locationSearchTerm || ""
+    ).trim().toLowerCase();
+
     if (inputTerm) {
-      // 1. Try to match a specific hotel property first
-      const matchedProperty = DESTINATIONS.find(
-        (d) => d.type === "property" && d.name.toLowerCase() === inputTerm
-      ) || DESTINATIONS.find(
-        (d) => d.type === "property" && (
-          d.name.toLowerCase().includes(inputTerm) ||
-          inputTerm.includes(d.name.toLowerCase())
-        )
-      );
+      const matchedProperty =
+        DESTINATIONS.find(
+          (d) => d.type === "property" && d.name.toLowerCase() === inputTerm
+        ) ||
+        DESTINATIONS.find(
+          (d) =>
+            d.type === "property" &&
+            (d.name.toLowerCase().includes(inputTerm) ||
+              inputTerm.includes(d.name.toLowerCase()))
+        );
 
       if (matchedProperty) {
         finalHotelId = matchedProperty.hotelId || finalHotelId;
-        finalLocation = matchedProperty.city || matchedProperty.queryValue || finalLocation;
+        finalLocation =
+          matchedProperty.city || matchedProperty.queryValue || finalLocation;
       } else if (!finalLocation) {
-        // 2. Try to match a city
         const matchedCity = DESTINATIONS.find(
-          (d) => d.type === "city" && (
-            d.name.toLowerCase() === inputTerm ||
-            d.name.toLowerCase().includes(inputTerm) ||
-            inputTerm.includes(d.name.toLowerCase())
-          )
+          (d) =>
+            d.type === "city" &&
+            (d.name.toLowerCase() === inputTerm ||
+              d.name.toLowerCase().includes(inputTerm) ||
+              inputTerm.includes(d.name.toLowerCase()))
         );
-        if (matchedCity) {
-          finalLocation = matchedCity.queryValue;
-        } else {
-          finalLocation = locationSearchTerm.trim();
-        }
+
+        finalLocation = matchedCity
+          ? matchedCity.queryValue
+          : locationSearchTerm.trim();
       }
     }
 
-    const params = new URLSearchParams();
+    // HOURLY SEARCH
+    if (stayType === "hourly") {
+      const now = new Date();
+      const today = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+      ].join("-");
+
+      params.set("stayDate", checkInDate || today);
+      params.set("startTime", hourlyStartTime);
+      params.set("duration", "3");
+      params.set("guests", String(totalGuests || 2));
+
+      if (finalLocation) params.set("location", finalLocation);
+      if (finalHotelId) params.set("hotel", finalHotelId);
+
+      navigate(`/hourly-availability?${params.toString()}`);
+      return;
+    }
+
+    // EXISTING FULL-DAY SEARCH — unchanged
     if (finalLocation) params.set("location", finalLocation);
     if (finalHotelId) params.set("hotel", finalHotelId);
     if (checkInDate) params.set("checkIn", checkInDate);
@@ -406,10 +434,28 @@ export default function Hero({ onSearch }) {
   ];
 
   const handleDateClick = (dateStr) => {
+    // HOURLY FLOW
+    if (stayType === "hourly") {
+      setCheckInDate(dateStr);
+      setCheckOutDate("");
+
+      setCalendarTarget("checkIn");
+
+      if (mobileSearchModalOpen) {
+        setMobileTab("time");
+      } else {
+        setActiveDropdown("time");
+      }
+
+      return;
+    }
+
+    // EXISTING FULL-DAY FLOW — unchanged
     if (!checkInDate || (checkInDate && checkOutDate)) {
       setCheckInDate(dateStr);
       setCheckOutDate("");
       setCalendarTarget("checkOut");
+
       if (mobileSearchModalOpen) {
         setMobileTab("checkOut");
       }
@@ -418,11 +464,13 @@ export default function Hero({ onSearch }) {
         setCheckInDate(dateStr);
         setCheckOutDate("");
         setCalendarTarget("checkOut");
+
         if (mobileSearchModalOpen) {
           setMobileTab("checkOut");
         }
       } else {
         setCheckOutDate(dateStr);
+
         if (!mobileSearchModalOpen) {
           setActiveDropdown("guests");
         } else {
@@ -540,9 +588,8 @@ export default function Hero({ onSearch }) {
           return (
             <div
               key={index}
-              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out transform-gpu will-change-[opacity,transform] ${
-                isCurrent ? "opacity-100 scale-100" : "opacity-0 scale-105"
-              } transition-transform duration-[6000ms]`}
+              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out transform-gpu will-change-[opacity,transform] ${isCurrent ? "opacity-100 scale-100" : "opacity-0 scale-105"
+                } transition-transform duration-[6000ms]`}
               style={{ backfaceVisibility: "hidden" }}
             >
               <img
@@ -600,11 +647,10 @@ export default function Hero({ onSearch }) {
               aria-label={`Slide ${idx + 1}`}
             >
               <span
-                className={`h-1.5 rounded-full transition-all duration-300 pointer-events-none ${
-                  idx === currentImageIndex
-                    ? "w-6 bg-[#D7A441]"
-                    : "w-1.5 bg-white/40 hover:bg-white/70"
-                }`}
+                className={`h-1.5 rounded-full transition-all duration-300 pointer-events-none ${idx === currentImageIndex
+                  ? "w-6 bg-[#D7A441]"
+                  : "w-1.5 bg-white/40 hover:bg-white/70"
+                  }`}
               />
             </button>
           ))}
@@ -646,6 +692,30 @@ export default function Hero({ onSearch }) {
         {/* =====================================================
             SPACIOUS FROSTED GLASS CAPSULE SEARCH BAR (DESKTOP ONLY)
         ===================================================== */}
+        <div className="flex-nowrap items-center">
+          <button
+            type="button"
+            onClick={() => setStayType("hourly")}
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition-all duration-300 ${stayType === "hourly"
+              ? "bg-[#D7A441] text-neutral-950 shadow-[0_0_20px_rgba(215,164,65,0.55)] ring-1 ring-[#F5C869]"
+              : "bg-black/50 text-white border border-white/20 hover:bg-white/10"
+              }`}
+          >
+            ⚡ Hourly Stay
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStayType("full_day")}
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition-all duration-300 ${stayType === "full_day"
+              ? "bg-[#D7A441] text-neutral-950 shadow-[0_0_20px_rgba(215,164,65,0.55)] ring-1 ring-[#F5C869]"
+              : "bg-black/50 text-white border border-white/20 hover:bg-white/10"
+              }`}
+          >
+            ☀ Full-Day Stay
+          </button>
+        </div>
+
         <div ref={containerRef} className="relative mt-6 sm:mt-8 w-full max-w-5xl lg:max-w-6xl hidden lg:block">
           <form
             onSubmit={handleSearchSubmit}
@@ -657,11 +727,10 @@ export default function Hero({ onSearch }) {
               <button
                 type="button"
                 onClick={() => setActiveDropdown(activeDropdown === "location" ? null : "location")}
-                className={`w-full flex items-center justify-between gap-3 sm:gap-3.5 rounded-xl lg:rounded-full px-3.5 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${
-                  activeDropdown === "location"
-                    ? "bg-white/15 border border-white/25 shadow-inner"
-                    : "hover:bg-white/10 border border-transparent"
-                }`}
+                className={`w-full flex items-center justify-between gap-3 sm:gap-3.5 rounded-xl lg:rounded-full px-3.5 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${activeDropdown === "location"
+                  ? "bg-white/15 border border-white/25 shadow-inner"
+                  : "hover:bg-white/10 border border-transparent"
+                  }`}
               >
                 <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
                   <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
@@ -767,71 +836,209 @@ export default function Hero({ onSearch }) {
             {/* Subtle Divider */}
             <div className="hidden lg:block h-10 w-px bg-white/15 shrink-0 mx-1" />
 
-            {/* 2 & 3. DATES CONTAINER (Side-by-side on mobile, inline on desktop) */}
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:contents">
 
-              {/* 2. CHECK-IN */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCalendarTarget("checkIn");
-                    setActiveDropdown(activeDropdown === "calendar" && calendarTarget === "checkIn" ? null : "calendar");
-                  }}
-                  className={`w-full flex items-center gap-2 sm:gap-3.5 rounded-xl lg:rounded-full px-3 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${
-                    activeDropdown === "calendar" && calendarTarget === "checkIn"
-                      ? "bg-white/15 border border-white/25 shadow-inner"
+            {/* 2 & 3. DATES CONTAINER */}
+            {stayType === "hourly" ? (
+              <div className="flex flex-1 items-center gap-2">
+
+
+                <div className="min-w-0 flex-1 whitespace-nowrap">
+                  {/* HOURLY DATE */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCalendarTarget("checkIn");
+                      setActiveDropdown("calendar");
+                    }}
+                    className="w-full flex items-center gap-3 rounded-xl lg:rounded-full px-3 sm:px-5 py-3 text-left hover:bg-white/10 transition"
+                  >
+                    <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
+                      <CalendarDays size={20} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-bold text-white/50 uppercase">
+                        Date
+                      </span>
+                      <span className="block truncate text-sm lg:text-base font-bold text-white mt-1">
+                        {checkInDate ? formatDateDisplay(checkInDate) : "Select Date"}
+                      </span>
+                    </div>
+                    <ChevronDown size={16} className="text-white/60" />
+                  </button>
+                </div>
+
+                <div className="hidden lg:block h-10 w-px bg-white/15 shrink-0" />
+
+
+                {/* HOURLY CHECK-IN TIME */}
+                <div className="relative min-w-0 flex-1 whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveDropdown(
+                        activeDropdown === "time" ? null : "time"
+                      )
+                    }
+                    className={`w-full flex items-center gap-3 rounded-xl lg:rounded-full px-3 sm:px-5 py-3 text-left transition-all ${activeDropdown === "time"
+                      ? "bg-white/15 border border-[#D7A441]/40 shadow-[0_0_15px_rgba(215,164,65,0.15)]"
                       : "hover:bg-white/10 border border-transparent"
-                  }`}
-                >
-                  <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
-                    <CalendarDays size={18} className="sm:size-[20px]" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[9px] sm:text-[10px] font-bold tracking-wider text-white/50 uppercase leading-none">
-                      Check-In
-                    </span>
-                    <span className="block truncate text-xs sm:text-sm lg:text-base font-bold text-white mt-1 leading-tight">
-                      {formatDateDisplay(checkInDate)}
-                    </span>
-                  </div>
-                </button>
-              </div>
+                      }`}
+                  >
+                    <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
+                      <Clock size={20} />
+                    </div>
 
-              {/* Center Arrow Separator between dates */}
-              <div className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 border border-white/15 text-white/60 mx-1">
-                <ArrowRight size={14} />
-              </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-bold text-white/50 uppercase">
+                        Check-in Time
+                      </span>
+                      <span className="block text-sm lg:text-base font-bold text-white mt-1">
+                        {(() => {
+                          const [h, m] = hourlyStartTime.split(":").map(Number);
+                          const period = h >= 12 ? "PM" : "AM";
+                          const hour = h % 12 || 12;
+                          return `${String(hour).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
+                        })()}
+                      </span>
+                    </div>
 
-              {/* 3. CHECK-OUT */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCalendarTarget("checkOut");
-                    setActiveDropdown(activeDropdown === "calendar" && calendarTarget === "checkOut" ? null : "calendar");
-                  }}
-                  className={`w-full flex items-center gap-2 sm:gap-3.5 rounded-xl lg:rounded-full px-3 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${
-                    activeDropdown === "calendar" && calendarTarget === "checkOut"
-                      ? "bg-white/15 border border-white/25 shadow-inner"
-                      : "hover:bg-white/10 border border-transparent"
-                  }`}
-                >
-                  <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
-                    <CalendarDays size={18} className="sm:size-[20px]" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[9px] sm:text-[10px] font-bold tracking-wider text-white/50 uppercase leading-none">
-                      Check-Out
-                    </span>
-                    <span className="block truncate text-xs sm:text-sm lg:text-base font-bold text-white mt-1 leading-tight">
-                      {formatDateDisplay(checkOutDate)}
-                    </span>
-                  </div>
-                </button>
-              </div>
+                    <ChevronDown
+                      size={16}
+                      className={`text-white/60 transition-transform ${activeDropdown === "time" ? "rotate-180" : ""
+                        }`}
+                    />
+                  </button>
 
-            </div>
+                  {/* TIME DROPDOWN */}
+                  {activeDropdown === "time" && (
+                    <div className="absolute left-0 top-full mt-3 w-[min(340px,90vw)] rounded-2xl border border-white/15 bg-[#0D0E12] p-4 sm:p-5 shadow-[0_25px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl z-50 animate-in fade-in duration-200">
+
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="text-sm font-bold text-white uppercase">
+                            Select Check-in Time
+                          </h4>
+                          <p className="text-xs text-white/50 mt-1">
+                            Available from 9 AM to 3 PM
+                          </p>
+                        </div>
+
+                        <Clock size={19} className="text-[#D7A441]" />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          "09:00",
+                          "10:00",
+                          "11:00",
+                          "12:00",
+                          "13:00",
+                          "14:00",
+                          "15:00",
+                        ].map((time) => {
+                          const [h, m] = time.split(":").map(Number);
+                          const label = `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+                          const selected = hourlyStartTime === time;
+
+                          return (
+                            <button
+                              key={time}
+                              type="button"
+                              onClick={() => {
+                                setHourlyStartTime(time);
+                                setActiveDropdown("guests");
+                              }}
+                              className={`rounded-xl py-3 text-xs sm:text-sm font-semibold transition-all duration-200 ${selected
+                                ? "bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] text-neutral-950 shadow-[0_0_18px_rgba(215,164,65,0.4)] ring-1 ring-[#F5C869]"
+                                : "bg-white/[0.05] border border-white/10 text-white/80 hover:bg-[#D7A441]/15 hover:border-[#D7A441]/40 hover:text-[#E2B755]"
+                                }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>) : (
+              <>
+                {/* EXISTING FULL-DAY CHECK-IN / CHECK-OUT */}
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:contents">
+
+                  {/* CHECK-IN */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCalendarTarget("checkIn");
+                        setActiveDropdown(
+                          activeDropdown === "calendar" && calendarTarget === "checkIn"
+                            ? null
+                            : "calendar"
+                        );
+                      }}
+                      className={`w-full flex items-center gap-2 sm:gap-3.5 rounded-xl lg:rounded-full px-3 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${activeDropdown === "calendar" && calendarTarget === "checkIn"
+                        ? "bg-white/15 border border-white/25 shadow-inner"
+                        : "hover:bg-white/10 border border-transparent"
+                        }`}
+                    >
+                      <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
+                        <CalendarDays size={18} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-[9px] sm:text-[10px] font-bold tracking-wider text-white/50 uppercase">
+                          Check-In
+                        </span>
+                        <span className="block truncate text-xs sm:text-sm lg:text-base font-bold text-white mt-1">
+                          {formatDateDisplay(checkInDate)}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* CENTER ARROW */}
+                  <div className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 border border-white/15 text-white/60 mx-1">
+                    <ArrowRight size={14} />
+                  </div>
+
+                  {/* CHECK-OUT */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCalendarTarget("checkOut");
+                        setActiveDropdown(
+                          activeDropdown === "calendar" && calendarTarget === "checkOut"
+                            ? null
+                            : "calendar"
+                        );
+                      }}
+                      className={`w-full flex items-center gap-2 sm:gap-3.5 rounded-xl lg:rounded-full px-3 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${activeDropdown === "calendar" && calendarTarget === "checkOut"
+                        ? "bg-white/15 border border-white/25 shadow-inner"
+                        : "hover:bg-white/10 border border-transparent"
+                        }`}
+                    >
+                      <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
+                        <CalendarDays size={18} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-[9px] sm:text-[10px] font-bold tracking-wider text-white/50 uppercase">
+                          Check-Out
+                        </span>
+                        <span className="block truncate text-xs sm:text-sm lg:text-base font-bold text-white mt-1">
+                          {formatDateDisplay(checkOutDate)}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
 
             {/* =====================================================
                 DROPDOWN 2: DUAL-MONTH CALENDAR (IMAGE 2 EXACT DESIGN)
@@ -851,7 +1058,11 @@ export default function Hero({ onSearch }) {
                   </button>
 
                   <div className="rounded-full border border-[#D7A441]/40 bg-[#D7A441]/10 px-3 sm:px-4 py-1 text-[10px] sm:text-[11px] font-bold tracking-[0.16em] sm:tracking-[0.2em] text-[#D7A441] uppercase">
-                    {calendarTarget === "checkIn" ? "Select Check-in" : "Select Check-out"}
+                    {stayType === "hourly"
+                      ? "Select Date"
+                      : calendarTarget === "checkIn"
+                        ? "Select Check-in"
+                        : "Select Check-out"}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -901,15 +1112,23 @@ export default function Hero({ onSearch }) {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!checkOutDate) {
+                        if (stayType === "hourly") {
+                          setActiveDropdown(null);
+                        } else if (!checkOutDate) {
                           setCalendarTarget("checkOut");
                         } else {
                           setActiveDropdown("guests");
                         }
                       }}
-                      className="text-xs font-semibold text-[#D7A441] hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-xs font-semibold text-[#D7A441] hover:underline flex items-center gap-1"
                     >
-                      <span>{checkOutDate ? "Next: Guests" : "Select Check-out"}</span>
+                      <span>
+                        {stayType === "hourly"
+                          ? "Done"
+                          : checkOutDate
+                            ? "Next: Guests"
+                            : "Select Check-out"}
+                      </span>
                       <ArrowRight size={13} />
                     </button>
                   )}
@@ -919,6 +1138,7 @@ export default function Hero({ onSearch }) {
             )}
 
             {/* Subtle Divider */}
+
             <div className="hidden lg:block h-10 w-px bg-white/15 shrink-0 mx-1" />
 
             {/* 4. GUESTS */}
@@ -926,11 +1146,10 @@ export default function Hero({ onSearch }) {
               <button
                 type="button"
                 onClick={() => setActiveDropdown(activeDropdown === "guests" ? null : "guests")}
-                className={`w-full flex items-center justify-between gap-3 sm:gap-3.5 rounded-xl lg:rounded-full px-3.5 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${
-                  activeDropdown === "guests"
-                    ? "bg-white/15 border border-white/25 shadow-inner"
-                    : "hover:bg-white/10 border border-transparent"
-                }`}
+                className={`w-full flex items-center justify-between gap-3 sm:gap-3.5 rounded-xl lg:rounded-full px-3.5 sm:px-5 py-2.5 sm:py-3 text-left transition-all ${activeDropdown === "guests"
+                  ? "bg-white/15 border border-white/25 shadow-inner"
+                  : "hover:bg-white/10 border border-transparent"
+                  }`}
               >
                 <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
                   <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 border border-white/15 text-[#D7A441]">
@@ -1105,20 +1324,18 @@ export default function Hero({ onSearch }) {
               </button>
             </div>
 
+
             {/* 4 Segment Tabs */}
             <div className="grid grid-cols-4 gap-1.5 py-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setMobileTab("where")}
-                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${
-                  mobileTab === "where"
-                    ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
-                    : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                }`}
+                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${mobileTab === "where"
+                  ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
+                  : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                  }`}
               >
-                <span className="block text-[8px] font-bold uppercase tracking-wider opacity-70">
-                  Where
-                </span>
+                <span className="block text-[8px] font-bold uppercase tracking-wider opacity-70">Where</span>
                 <span className="block text-[11px] font-bold truncate text-white mt-0.5">
                   {displayLocationName ? displayLocationName.split(",")[0] : "Select"}
                 </span>
@@ -1130,14 +1347,13 @@ export default function Hero({ onSearch }) {
                   setMobileTab("checkIn");
                   setCalendarTarget("checkIn");
                 }}
-                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${
-                  mobileTab === "checkIn"
-                    ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
-                    : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                }`}
+                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${mobileTab === "checkIn"
+                  ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
+                  : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                  }`}
               >
                 <span className="block text-[8px] font-bold uppercase tracking-wider opacity-70">
-                  Check-In
+                  {stayType === "hourly" ? "Date" : "Check-In"}
                 </span>
                 <span className="block text-[11px] font-bold truncate text-white mt-0.5">
                   {checkInDate ? formatDateDisplay(checkInDate).split(" ").slice(0, 2).join(" ") : "Add date"}
@@ -1147,35 +1363,42 @@ export default function Hero({ onSearch }) {
               <button
                 type="button"
                 onClick={() => {
-                  setMobileTab("checkOut");
-                  setCalendarTarget("checkOut");
+                  if (stayType === "hourly") {
+                    setMobileTab("time");
+                  } else {
+                    setMobileTab("checkOut");
+                    setCalendarTarget("checkOut");
+                  }
                 }}
-                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${
-                  mobileTab === "checkOut"
-                    ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
-                    : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                }`}
+                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${mobileTab === (stayType === "hourly" ? "time" : "checkOut")
+                  ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
+                  : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                  }`}
               >
                 <span className="block text-[8px] font-bold uppercase tracking-wider opacity-70">
-                  Check-Out
+                  {stayType === "hourly" ? "Time" : "Check-Out"}
                 </span>
                 <span className="block text-[11px] font-bold truncate text-white mt-0.5">
-                  {checkOutDate ? formatDateDisplay(checkOutDate).split(" ").slice(0, 2).join(" ") : "Add date"}
+                  {stayType === "hourly"
+                    ? (() => {
+                      const h = Number(hourlyStartTime.split(":")[0]);
+                      return `${String(h % 12 || 12).padStart(2, "0")}:00 ${h >= 12 ? "PM" : "AM"}`;
+                    })()
+                    : checkOutDate
+                      ? formatDateDisplay(checkOutDate).split(" ").slice(0, 2).join(" ")
+                      : "Add date"}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMobileTab("guests")}
-                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${
-                  mobileTab === "guests"
-                    ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
-                    : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                }`}
+                className={`rounded-xl px-1.5 py-2 text-left transition-all border ${mobileTab === "guests"
+                  ? "border-[#D7A441] bg-[#D7A441]/15 text-[#D7A441]"
+                  : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                  }`}
               >
-                <span className="block text-[8px] font-bold uppercase tracking-wider opacity-70">
-                  Guests
-                </span>
+                <span className="block text-[8px] font-bold uppercase tracking-wider opacity-70">Guests</span>
                 <span className="block text-[11px] font-bold truncate text-white mt-0.5">
                   {totalGuests} {totalGuests === 1 ? "Guest" : "Guests"}
                 </span>
@@ -1228,11 +1451,10 @@ export default function Hero({ onSearch }) {
                               setMobileTab("checkIn");
                               setCalendarTarget("checkIn");
                             }}
-                            className={`w-full flex items-center gap-3 rounded-2xl p-2.5 transition-all text-left border ${
-                              isSelected
-                                ? "border-[#D7A441]/70 bg-[#D7A441]/15"
-                                : "border-white/5 bg-white/[0.03] hover:bg-white/10"
-                            }`}
+                            className={`w-full flex items-center gap-3 rounded-2xl p-2.5 transition-all text-left border ${isSelected
+                              ? "border-[#D7A441]/70 bg-[#D7A441]/15"
+                              : "border-white/5 bg-white/[0.03] hover:bg-white/10"
+                              }`}
                           >
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-[#D7A441]">
                               {dest.type === "city" ? <MapPin size={15} /> : <Building2 size={15} />}
@@ -1259,7 +1481,7 @@ export default function Hero({ onSearch }) {
               )}
 
               {/* 2 & 3. CALENDAR TABS (CHECK-IN / CHECK-OUT) */}
-              {(mobileTab === "checkIn" || mobileTab === "checkOut") && (
+              {(mobileTab === "checkIn" || (stayType === "full_day" && mobileTab === "checkOut")) && (
                 <div className="space-y-3 pt-1">
                   <div className="flex items-center justify-between px-1">
                     <button
@@ -1271,7 +1493,11 @@ export default function Hero({ onSearch }) {
                       <ChevronLeft size={15} />
                     </button>
                     <span className="text-xs font-bold text-[#D7A441] tracking-wider uppercase">
-                      {mobileTab === "checkIn" ? "Select Check-In Date" : "Select Check-Out Date"}
+                      {stayType === "hourly"
+                        ? "Select Date"
+                        : mobileTab === "checkIn"
+                          ? "Select Check-In Date"
+                          : "Select Check-Out Date"}
                     </span>
                     <button
                       type="button"
@@ -1291,9 +1517,14 @@ export default function Hero({ onSearch }) {
                     <button
                       type="button"
                       onClick={() => {
-                        setCheckInDate("");
-                        setCheckOutDate("");
-                        setCalendarTarget("checkIn");
+                        if (stayType === "hourly") {
+                          setMobileTab("time");
+                        } else if (!checkOutDate) {
+                          setMobileTab("checkOut");
+                          setCalendarTarget("checkOut");
+                        } else {
+                          setMobileTab("guests");
+                        }
                       }}
                       className="text-xs text-white/50 hover:text-white"
                     >
@@ -1315,6 +1546,53 @@ export default function Hero({ onSearch }) {
                         Next →
                       </button>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* HOURLY TIME TAB */}
+              {stayType === "hourly" && mobileTab === "time" && (
+                <div className="space-y-3 pt-1">
+                  <div className="px-1">
+                    <h4 className="text-xs font-bold text-white uppercase">
+                      Select Check-in Time
+                    </h4>
+                    <p className="text-[10px] text-white/50 mt-1">
+                      Available from 9 AM to 3 PM
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      "09:00",
+                      "10:00",
+                      "11:00",
+                      "12:00",
+                      "13:00",
+                      "14:00",
+                      "15:00",
+                    ].map((time) => {
+                      const [h, m] = time.split(":").map(Number);
+                      const label = `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+                      const selected = hourlyStartTime === time;
+
+                      return (
+                        <button
+                          key={time}
+                          type="button"
+                          onClick={() => {
+                            setHourlyStartTime(time);
+                            setMobileTab("guests");
+                          }}
+                          className={`rounded-xl py-3 text-xs font-semibold transition-all duration-200 ${selected
+                            ? "bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] text-neutral-950 shadow-[0_0_18px_rgba(215,164,65,0.4)] ring-1 ring-[#F5C869]"
+                            : "bg-white/[0.05] border border-white/10 text-white/80 hover:bg-[#D7A441]/15 hover:border-[#D7A441]/40 hover:text-[#E2B755]"
+                            }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

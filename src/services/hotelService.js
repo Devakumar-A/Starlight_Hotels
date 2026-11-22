@@ -8,22 +8,26 @@ const CACHE_TTL_MS = 60000;
 const mediaCache = new Map();
 const mediaInFlight = new Map();
 
+
 // ---------------------------------------------------------
 // GET ALL HOTELS (Cached + In-Flight Deduped)
 // ---------------------------------------------------------
 
 export async function getHotels() {
   const now = Date.now();
+
   if (hotelsCache && now - hotelsCacheTime < CACHE_TTL_MS) {
     return hotelsCache;
   }
+
   if (hotelsInFlight) {
     return hotelsInFlight;
   }
 
   hotelsInFlight = (async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch active hotels (existing full-day logic)
+      const { data: hotels, error: hotelsError } = await supabase
         .from("hotels")
         .select(`
           id,
@@ -37,10 +41,33 @@ export async function getHotels() {
         .eq("is_active", true)
         .order("hotel_name");
 
-      if (error) throw error;
+      if (hotelsError) throw hotelsError;
 
-      hotelsCache = data || [];
+      // Fetch hourly settings separately
+      const { data: hourlySettings, error: hourlyError } = await supabase
+        .from("hotel_hourly")
+        .select(`
+          hotel_id,
+          is_hourly_active
+        `);
+
+      if (hourlyError) throw hourlyError;
+
+      // Attach hourly settings to each hotel
+      const hourlyMap = new Map(
+        (hourlySettings || []).map((item) => [
+          item.hotel_id,
+          item.is_hourly_active
+        ])
+      );
+
+      hotelsCache = (hotels || []).map((hotel) => ({
+        ...hotel,
+        is_hourly_active: hourlyMap.get(hotel.id) ?? false
+      }));
+
       hotelsCacheTime = Date.now();
+
       return hotelsCache;
     } finally {
       hotelsInFlight = null;
@@ -49,6 +76,7 @@ export async function getHotels() {
 
   return hotelsInFlight;
 }
+
 
 // ---------------------------------------------------------
 // GET ONE HOTEL
@@ -287,8 +315,36 @@ export async function getAvailability(
 }
 
 // ---------------------------------------------------------
-// GET ROOM PRICING
+// GET AVAILABILITY V2 (FULL-DAY + HOURLY)
 // ---------------------------------------------------------
+
+export async function getAvailabilityV2({
+  hotelId,
+  stayType,
+  checkInDate,
+  checkOutDate,
+  startTime = null,
+  durationHours = null,
+}) {
+  const { data, error } = await supabase.rpc(
+    "get_availability_v2",
+    {
+      p_hotel_id: hotelId,
+      p_stay_type: stayType,
+      p_check_in_date: checkInDate,
+      p_check_out_date: checkOutDate,
+      p_start_time: startTime,
+      p_duration_hours: durationHours,
+    }
+  );
+
+  if (error) throw error;
+
+  return data || [];
+}
+// ---------------------------------------------------------
+// GET ROOM PRICING
+// ---------------  ------------------------------------------
 
 export async function getRoomPricing(
   roomCategoryId,
@@ -308,7 +364,77 @@ export async function getRoomPricing(
 
   return data || [];
 }
+// ---------------------------------------------------------
+// CALCULATE HOURLY ROOM PRICE
+// Does not modify Full-Day pricing
+// ---------------------------------------------------------
 
+export async function calculateHourlyRoomPrice({
+  hotelId,
+  roomCategoryId,
+  stayDate,
+  durationHours,
+}) {
+  if (![3, 6].includes(Number(durationHours))) {
+    throw new Error("Duration must be 3 or 6 hours.");
+  }
+
+  // Get the hotel's hourly percentage
+  const { data: settings, error: settingsError } = await supabase
+    .from("hotel_hourly")
+    .select("is_hourly_active, three_hours_percentage, six_hours_percentage")
+    .eq("hotel_id", hotelId)
+    .maybeSingle();
+
+  if (settingsError) throw settingsError;
+
+  if (!settings?.is_hourly_active) {
+    throw new Error("Hourly stay is not enabled for this hotel.");
+  }
+
+  const percentage =
+    Number(durationHours) === 3
+      ? Number(settings.three_hours_percentage)
+      : Number(settings.six_hours_percentage);
+
+  if (!Number.isFinite(percentage)) {
+    throw new Error("Hourly pricing percentage is not configured.");
+  }
+
+  // get_room_pricing requires checkout date to be after check-in
+  const nextDate = new Date(`${stayDate}T00:00:00`);
+  nextDate.setDate(nextDate.getDate() + 1);
+
+  const nextDateString = [
+    nextDate.getFullYear(),
+    String(nextDate.getMonth() + 1).padStart(2, "0"),
+    String(nextDate.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  // Reuse existing Full-Day date-based pricing
+  const pricing = await getRoomPricing(
+    roomCategoryId,
+    stayDate,
+    nextDateString
+  );
+
+  if (!pricing.length) {
+    throw new Error("Room pricing is unavailable for this date.");
+  }
+
+  const basePrice = Number(pricing[0].price || 0);
+
+  const hourlyPrice = Math.round(
+    (basePrice * percentage) / 100
+  );
+
+  return {
+    base_price: basePrice,
+    percentage,
+    duration_hours: Number(durationHours),
+    hourly_price: hourlyPrice,
+  };
+}
 // ---------------------------------------------------------
 // CALCULATE COMPLETE BOOKING PRICE
 // ---------------------------------------------------------

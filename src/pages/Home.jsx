@@ -99,9 +99,8 @@ function MobileDeck({ features }) {
               aria-label={`Go to feature ${i + 1}`}
             >
               <span
-                className={`h-1.5 rounded-full transition-all duration-300 pointer-events-none ${
-                  activeIndex === i ? "w-6 bg-[#D7A441]" : "w-2 bg-neutral-300"
-                }`}
+                className={`h-1.5 rounded-full transition-all duration-300 pointer-events-none ${activeIndex === i ? "w-6 bg-[#D7A441]" : "w-2 bg-neutral-300"
+                  }`}
               />
             </button>
           ))}
@@ -126,6 +125,13 @@ const FEATURED_HOTEL_NAMES = [
 
 function Home() {
   const [hotels, setHotels] = useState([]);
+  const [stayType, setStayType] = useState(
+    () => sessionStorage.getItem("starlightStayType") || "full_day"
+  );
+
+  useEffect(() => {
+    sessionStorage.setItem("starlightStayType", stayType);
+  }, [stayType]);
   const [hotelImages, setHotelImages] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -135,24 +141,30 @@ function Home() {
   const featuredHotels = useMemo(() => {
     if (!hotels || hotels.length === 0) return [];
 
+    const eligibleHotels = stayType === "hourly"
+      ? hotels.filter((hotel) => hotel.is_hourly_active === true)
+      : hotels;
+
     const hotelMap = new Map();
-    hotels.forEach((hotel) => {
+
+    eligibleHotels.forEach((hotel) => {
       const key = (hotel.hotel_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       hotelMap.set(key, hotel);
     });
 
     const ordered = [];
+
     FEATURED_HOTEL_NAMES.forEach((name) => {
       const key = name.toLowerCase().replace(/[^a-z0-9]/g, "");
       const found = hotelMap.get(key);
+
       if (found && !ordered.some((h) => h.id === found.id)) {
         ordered.push(found);
       }
     });
 
-    // Fallback: If fewer than 6 matched, pad with active hotels up to 6
     if (ordered.length < 6) {
-      hotels.forEach((hotel) => {
+      eligibleHotels.forEach((hotel) => {
         if (!ordered.some((h) => h.id === hotel.id)) {
           ordered.push(hotel);
         }
@@ -160,8 +172,7 @@ function Home() {
     }
 
     return ordered;
-  }, [hotels]);
-
+  }, [hotels, stayType]);
   const displayedHotels = showAllFeatured
     ? featuredHotels
     : featuredHotels.slice(0, 6);
@@ -230,7 +241,7 @@ function Home() {
       {/* =====================================================
           HERO (WITH ROTATING BACKGROUND & CUSTOM SEARCH BAR)
       ===================================================== */}
-      <Hero />
+      <Hero stayType={stayType} setStayType={setStayType} />
 
       {/* =====================================================
           FEATURED HOTELS
@@ -256,7 +267,7 @@ function Home() {
             </div>
 
             <Link
-              to="/book-hotels"
+              to={stayType === "hourly" ? "/hourly-availability" : "/book-hotels"}
               className="hidden cursor-pointer items-center gap-2 rounded-full border border-neutral-300 bg-white px-6 py-3 text-sm font-semibold text-neutral-800 shadow-sm transition-all duration-300 hover:border-[#D7A441] hover:text-[#B88428] hover:shadow-[0_4px_20px_rgba(215,164,65,0.18)] sm:flex"
             >
               <span>View all hotels</span>
@@ -353,7 +364,9 @@ function Home() {
 
                           <div className="mt-6 flex gap-2.5 sm:gap-3">
                             <Link
-                              to={`/hotel/${hotel.id}`}
+                              to={stayType === "hourly"
+                                ? `/hourly/hotel/${hotel.id}`
+                                : `/hotel/${hotel.id}`}
                               aria-label={`Explore ${hotel.hotel_name}`}
                               className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-neutral-300 bg-neutral-50/50 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-neutral-800 transition-all duration-300 hover:border-neutral-400 hover:bg-white active:scale-95 text-center min-w-0 shadow-2xs"
                             >
@@ -361,7 +374,9 @@ function Home() {
                             </Link>
 
                             <Link
-                              to={`/book-hotels?hotel=${hotel.id}`}
+                              to={stayType === "hourly"
+                                ? `/hourly-availability?hotel=${hotel.id}`
+                                : `/book-hotels?hotel=${hotel.id}`}
                               aria-label={`See availability for ${hotel.hotel_name}`}
                               className="flex flex-1 cursor-pointer items-center justify-center rounded-xl bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-neutral-950 shadow-[0_4px_16px_rgba(215,164,65,0.3)] transition-all duration-300 hover:brightness-105 hover:shadow-[0_6px_22px_rgba(215,164,65,0.45)] active:scale-95 text-center min-w-0"
                             >
@@ -396,7 +411,9 @@ function Home() {
             )}
 
             <Link
-              to="/book-hotels"
+              to={stayType === "hourly"
+                ? "/hourly-availability"
+                : "/book-hotels"}
               className="w-full sm:w-auto cursor-pointer inline-flex items-center justify-center gap-2 rounded-full bg-neutral-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:bg-neutral-800 hover:shadow-md active:scale-95"
             >
               <span>View All Hotels</span>
@@ -456,7 +473,9 @@ function Home() {
             ].map((dest, idx) => (
               <Link
                 key={dest.city}
-                to={`/book-hotels?location=${dest.param}`}
+                to={stayType === "hourly"
+                  ? `/hourly-availability?location=${dest.param}`
+                  : `/book-hotels?location=${dest.param}`}
                 style={{
                   animation: "luxuryCardFadeIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) backwards",
                   animationDelay: `${idx * 120}ms`,
@@ -636,7 +655,9 @@ function Home() {
               </div>
 
               <Link
-                to="/book-hotels"
+                to={stayType === "hourly"
+                  ? "/hourly-availability"
+                  : "/book-hotels"}
                 className="w-full sm:w-auto inline-flex justify-center cursor-pointer items-center gap-2.5 rounded-full bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] px-7 sm:px-8 py-3.5 sm:py-4 text-xs sm:text-sm font-bold text-neutral-950 shadow-[0_6px_25px_rgba(215,164,65,0.4)] transition-all duration-300 hover:brightness-110 hover:shadow-[0_8px_35px_rgba(215,164,65,0.6)] active:scale-[0.97]"
               >
                 <span>Book a Hotel</span>
@@ -644,7 +665,6 @@ function Home() {
               </Link>
             </div>
           </div>
-
         </div>
       </section>
 

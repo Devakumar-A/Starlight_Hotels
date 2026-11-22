@@ -5,6 +5,9 @@ import Navbar from "./components/Navbar";
 import ScrollToTop from "./components/ScrollToTop";
 import RouteSeo from "./components/RouteSeo";
 import Home from "./pages/Home";
+import HotelDetailsHr from "./pages/hourly/HotelDetails-hr";
+import HourlyAvailableHotels from "./pages/hourly/HourlyAvailableHotels";
+
 
 // Lazy-loaded route pages to keep initial bundle ultra-light
 const AboutUs = lazy(() => import("./pages/AboutUs"));
@@ -20,6 +23,7 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const FAQs = lazy(() => import("./pages/FAQs"));
 const ContactUs = lazy(() => import("./pages/ContactUs"));
 const PartnerWithUs = lazy(() => import("./pages/PartnerWithUs"));
+const BookingsHr = lazy(() => import("./pages/hourly/Bookings-hr"));
 
 // Lazy-loaded interactive floating and promo elements
 const LoginOfferPromo = lazy(() => import("./components/LoginOfferPromo"));
@@ -61,49 +65,61 @@ function App() {
 
           <Suspense fallback={<div className="min-h-screen bg-[#FAF9F6]" />}>
             <Routes>
-          <Route path="/" element={<Home />} />
+              <Route path="/" element={<Home />} />
 
-          <Route path="/book-hotels" element={<Availability />} />
-          <Route path="/hotels" element={<Availability />} />
-          <Route path="/availability" element={<Availability />} />
+              <Route path="/book-hotels" element={<Availability />} />
+              <Route path="/hotels" element={<Availability />} />
+              <Route path="/availability" element={<Availability />} />
 
-          <Route path="/about-us" element={<AboutUs />} />
-          <Route path="/about" element={<AboutUs />} />
+              <Route path="/about-us" element={<AboutUs />} />
+              <Route path="/about" element={<AboutUs />} />
 
-          <Route path="/login" element={<Login />} />
+              <Route path="/login" element={<Login />} />
 
-          <Route path="/signup" element={<Signup />} />
+              <Route path="/signup" element={<Signup />} />
 
-          <Route path="/hotel/:hotelId" element={<HotelDetails />} />
+              <Route path="/hotel/:hotelId" element={<HotelDetails />} />
 
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/booking" element={<Bookings />} />
+              <Route path="/bookings" element={<Bookings />} />
+              <Route path="/booking" element={<Bookings />} />
 
-          <Route path="/my-bookings" element={<MyBookings />} />
+              <Route path="/my-bookings" element={<MyBookings />} />
 
-          <Route path="/profile" element={<Profile />} />
+              <Route path="/profile" element={<Profile />} />
 
-          <Route path="/terms" element={<TermsConditions />} />
-          <Route path="/terms-conditions" element={<TermsConditions />} />
-          <Route path="/terms-and-conditions" element={<TermsConditions />} />
+              <Route path="/terms" element={<TermsConditions />} />
+              <Route path="/terms-conditions" element={<TermsConditions />} />
+              <Route path="/terms-and-conditions" element={<TermsConditions />} />
 
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
-          <Route path="/faqs" element={<FAQs />} />
-          <Route path="/faq" element={<FAQs />} />
+              <Route path="/faqs" element={<FAQs />} />
+              <Route path="/faq" element={<FAQs />} />
 
-          <Route path="/contact" element={<ContactUs />} />
-          <Route path="/contact-us" element={<ContactUs />} />
-          <Route path="/support" element={<ContactUs />} />
-          <Route path="/customer-support" element={<ContactUs />} />
+              <Route path="/contact" element={<ContactUs />} />
+              <Route path="/contact-us" element={<ContactUs />} />
+              <Route path="/support" element={<ContactUs />} />
+              <Route path="/customer-support" element={<ContactUs />} />
 
-          <Route path="/partner-with-us" element={<PartnerWithUs />} />
-          <Route path="/partners" element={<PartnerWithUs />} />
+              <Route path="/partner-with-us" element={<PartnerWithUs />} />
+              <Route path="/partners" element={<PartnerWithUs />} />
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
+              <Route
+                path="/hourly-availability"
+                element={<HourlyAvailableHotels />}
+              />
+              <Route path="/hourly/hotel/:hotelId" element={<HotelDetailsHr />} />
+              <Route
+                path="/hourly-availability"
+                element={<HourlyAvailableHotels />}
+              />
+              <Route path="/hourly/hotel/:hotelId" element={<HotelDetailsHr />} />
+              <Route path="/hourly/booking" element={<BookingsHr />} />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </>
       )}
     </BrowserRouter>
