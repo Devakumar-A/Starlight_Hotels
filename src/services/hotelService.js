@@ -290,30 +290,6 @@ export async function getRoomCategories(hotelId) {
 
   return data || [];
 }
-
-// ---------------------------------------------------------
-// GET AVAILABILITY
-// ---------------------------------------------------------
-
-export async function getAvailability(
-  hotelId,
-  checkInDate,
-  checkOutDate
-) {
-  const { data, error } = await supabase.rpc(
-    "get_availability",
-    {
-      p_hotel_id: hotelId,
-      p_check_in_date: checkInDate,
-      p_check_out_date: checkOutDate,
-    }
-  );
-
-  if (error) throw error;
-
-  return data || [];
-}
-
 // ---------------------------------------------------------
 // GET AVAILABILITY V2 (FULL-DAY + HOURLY)
 // ---------------------------------------------------------
@@ -621,31 +597,37 @@ export async function getRoomCategoryAmenities(roomCategoryId) {
   return data || [];
 }
 
-// ---------------------------------------------------------
-// CREATE BOOKING
-// ---------------------------------------------------------
-
-export async function createBooking({
-  numberOfGuests,
+export async function createBookingV2({
+  hotelId,
+  roomCategoryId,
+  stayType,
   checkInDate,
   checkOutDate,
-  roomCategoryId,
+  startTime = null,
+  durationHours = null,
+  numberOfGuests,
   roomsRequested,
   guestName,
   guestPhone,
   guestEmail,
+  guestAddress = null,
 }) {
   const { data, error } = await supabase.rpc(
-    "create_booking",
+    "create_bookings_v2",
     {
-      p_number_of_guests: numberOfGuests,
+      p_hotel_id: hotelId,
+      p_room_category_id: roomCategoryId,
+      p_stay_type: stayType,
       p_check_in_date: checkInDate,
       p_check_out_date: checkOutDate,
-      p_room_category_id: roomCategoryId,
+      p_start_time: startTime,
+      p_duration_hours: durationHours,
+      p_number_of_guests: numberOfGuests,
       p_rooms_requested: roomsRequested,
       p_guest_name: guestName,
       p_guest_phone: guestPhone,
       p_guest_email: guestEmail,
+      p_guest_address: guestAddress || null ,
     }
   );
 

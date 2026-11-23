@@ -48,7 +48,7 @@ import {
   getHotelMedia,
   getRoomCategoryMedia,
   getRoomCategories,
-  getAvailability,
+  getAvailabilityV2,
   getRoomPricing,
   calculateRoomPrice,
   getCategoryOccupancyLimits,
@@ -77,8 +77,8 @@ function getStarlightRating(id) {
     Number(score) >= 4.9
       ? "Exceptional"
       : Number(score) >= 4.7
-      ? "Superb"
-      : "Excellent";
+        ? "Superb"
+        : "Excellent";
 
   return { score, label, reviews };
 }
@@ -202,7 +202,7 @@ function HotelDetails() {
     if (!checkIn || !checkOut) return 1;
     const diff = Math.round(
       (new Date(checkOut).getTime() - new Date(checkIn).getTime()) /
-        (1000 * 60 * 60 * 24)
+      (1000 * 60 * 60 * 24)
     );
     return Math.max(1, diff || 1);
   }, [checkIn, checkOut]);
@@ -528,32 +528,31 @@ function HotelDetails() {
         // AVAILABILITY
         // -------------------------------------------------
 
+        // -------------------------------------------------
+        // AVAILABILITY
+        // -------------------------------------------------
+
         try {
-          const availabilityData =
-            await getAvailability(
-              hotelId,
-              checkIn,
-              checkOut
-            );
+          const availabilityData = await getAvailabilityV2({
+            hotelId,
+            stayType: "full_day",
+            checkInDate: checkIn,
+            checkOutDate: checkOut,
+            startTime: null,
+            durationHours: null,
+          });
 
           if (!cancelled) {
-            setAvailability(
-              availabilityData || []
-            );
+            setAvailability(availabilityData || []);
           }
 
         } catch (err) {
-          console.error(
-            "AVAILABILITY ERROR:",
-            err
-          );
+          console.error("AVAILABILITY ERROR:", err);
 
           if (!cancelled) {
             setAvailability([]);
           }
         }
-
-
         // -------------------------------------------------
         // PRICING
         // -------------------------------------------------
@@ -771,13 +770,13 @@ function HotelDetails() {
       telephone: "+91-8270660904",
       ...(hotel.address || hotel.city
         ? {
-            address: {
-              "@type": "PostalAddress",
-              ...(hotel.address ? { streetAddress: hotel.address } : {}),
-              ...(hotel.city ? { addressLocality: hotel.city } : {}),
-              addressCountry: "IN",
-            },
-          }
+          address: {
+            "@type": "PostalAddress",
+            ...(hotel.address ? { streetAddress: hotel.address } : {}),
+            ...(hotel.city ? { addressLocality: hotel.city } : {}),
+            addressCountry: "IN",
+          },
+        }
         : {}),
     };
 
@@ -1643,11 +1642,10 @@ function HotelDetails() {
                           ref={(el) => (thumbnailRefs.current[index] = el)}
                           type="button"
                           onClick={() => setSelectedImage(index)}
-                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all cursor-pointer ${
-                            isActive
+                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all cursor-pointer ${isActive
                               ? "border-[#D7A441] ring-2 ring-[#D7A441]/40 scale-[1.02]"
                               : "border-transparent opacity-65 hover:opacity-100"
-                          }`}
+                            }`}
                         >
                           <img
                             src={image.cloudinary_url}
@@ -1932,9 +1930,8 @@ function HotelDetails() {
                   >
                     {/* ROOM IMAGE (Left on desktop/tablet, top on mobile - reference Bookings.jsx) */}
                     <div
-                      className={`relative md:w-72 lg:w-80 shrink-0 bg-neutral-100 min-h-[220px] md:min-h-full overflow-hidden group ${
-                        categoryImages.length > 0 ? "cursor-pointer" : ""
-                      }`}
+                      className={`relative md:w-72 lg:w-80 shrink-0 bg-neutral-100 min-h-[220px] md:min-h-full overflow-hidden group ${categoryImages.length > 0 ? "cursor-pointer" : ""
+                        }`}
                       onClick={() => {
                         if (categoryImages.length > 0) {
                           openRoomLightbox(category.category_name, categoryImages, 0);
@@ -2021,11 +2018,10 @@ function HotelDetails() {
 
                             {/* Live Inventory Badge */}
                             <span
-                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                                isAvailable
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${isAvailable
                                   ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
                                   : "bg-neutral-100 border border-neutral-200 text-neutral-400"
-                              }`}
+                                }`}
                             >
                               {isAvailable && (
                                 <span className="relative flex h-1.5 w-1.5">
@@ -2068,14 +2064,13 @@ function HotelDetails() {
                             to={
                               isAvailable
                                 ? `/bookings?hotel=${hotel.id}&category=${category.id}&checkIn=${encodeURIComponent(
-                                    checkIn
-                                  )}&checkOut=${encodeURIComponent(
-                                    checkOut
-                                  )}&guests=${encodeURIComponent(guests)}${
-                                    searchParams.get("rooms")
-                                      ? `&rooms=${encodeURIComponent(searchParams.get("rooms"))}`
-                                      : ""
-                                  }`
+                                  checkIn
+                                )}&checkOut=${encodeURIComponent(
+                                  checkOut
+                                )}&guests=${encodeURIComponent(guests)}${searchParams.get("rooms")
+                                  ? `&rooms=${encodeURIComponent(searchParams.get("rooms"))}`
+                                  : ""
+                                }`
                                 : "#"
                             }
                             onClick={(event) => {
@@ -2083,11 +2078,10 @@ function HotelDetails() {
                                 event.preventDefault();
                               }
                             }}
-                            className={`group inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-6 text-xs sm:text-sm font-bold shadow-md transition-all cursor-pointer w-full sm:w-auto ${
-                              isAvailable
+                            className={`group inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-6 text-xs sm:text-sm font-bold shadow-md transition-all cursor-pointer w-full sm:w-auto ${isAvailable
                                 ? "bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 hover:shadow-xl hover:scale-102"
                                 : "cursor-not-allowed bg-neutral-200 text-neutral-400 shadow-none"
-                            }`}
+                              }`}
                           >
                             <span>{isAvailable ? "Book Room" : "Sold Out"}</span>
                             {isAvailable && (
@@ -2391,10 +2385,10 @@ function HotelDetails() {
                     className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-[#EDE7DC] bg-[#FAF8F5] hover:bg-[#F4EFE6] px-5 py-3.5 text-xs sm:text-sm font-semibold text-[#0B1527] transition active:scale-[0.99] cursor-pointer"
                   >
                     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none">
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/>
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V9c0-2.21 1.79-4 4-4s4 1.79 4 4v5.74c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" fill="#EA4335"/>
-                      <path d="M9 14.74V9c0-1.66 1.34-3 3-3s3 1.34 3 3v5.74c-.9.63-1.91 1-3 1s-2.1-.37-3-1z" fill="#FBBC04"/>
-                      <path d="M12 11.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" fill="#34A853"/>
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4" />
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V9c0-2.21 1.79-4 4-4s4 1.79 4 4v5.74c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" fill="#EA4335" />
+                      <path d="M9 14.74V9c0-1.66 1.34-3 3-3s3 1.34 3 3v5.74c-.9.63-1.91 1-3 1s-2.1-.37-3-1z" fill="#FBBC04" />
+                      <path d="M12 11.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" fill="#34A853" />
                     </svg>
                     <span>View on Google Maps</span>
                     <ExternalLink size={13} className="text-[#8E8E93] ml-0.5" />
@@ -2522,11 +2516,10 @@ function HotelDetails() {
                 <button
                   type="button"
                   onClick={() => setModalTab("dates")}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 ${
-                    modalTab === "dates"
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 ${modalTab === "dates"
                       ? "bg-white text-neutral-900 shadow-sm"
                       : "text-neutral-600 hover:text-neutral-900"
-                  }`}
+                    }`}
                 >
                   <CalendarDays size={14} className={modalTab === "dates" ? "text-[#9C7335]" : "text-neutral-400"} />
                   <span>Stay Dates</span>
@@ -2540,11 +2533,10 @@ function HotelDetails() {
                 <button
                   type="button"
                   onClick={() => setModalTab("guests")}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 ${
-                    modalTab === "guests"
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 ${modalTab === "guests"
                       ? "bg-white text-neutral-900 shadow-sm"
                       : "text-neutral-600 hover:text-neutral-900"
-                  }`}
+                    }`}
                 >
                   <Users size={14} className={modalTab === "guests" ? "text-[#9C7335]" : "text-neutral-400"} />
                   <span>Guests & Rooms</span>
@@ -2580,11 +2572,10 @@ function HotelDetails() {
                         type="button"
                         onClick={() => setCalendarMonthOffset((prev) => Math.max(0, prev - 1))}
                         disabled={calendarMonthOffset === 0}
-                        className={`flex h-8 w-8 items-center justify-center rounded-xl border border-neutral-200 transition ${
-                          calendarMonthOffset === 0
+                        className={`flex h-8 w-8 items-center justify-center rounded-xl border border-neutral-200 transition ${calendarMonthOffset === 0
                             ? "opacity-30 cursor-not-allowed bg-neutral-50"
                             : "hover:bg-neutral-100 text-neutral-800 cursor-pointer bg-white"
-                        }`}
+                          }`}
                         aria-label="Previous month"
                       >
                         <ChevronLeft size={16} />
@@ -2816,11 +2807,10 @@ function HotelDetails() {
                         key={img.id || idx}
                         type="button"
                         onClick={() => setLightboxIndex(idx)}
-                        className={`relative h-12 w-16 sm:h-14 sm:w-22 md:h-16 md:w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
-                          isActive
+                        className={`relative h-12 w-16 sm:h-14 sm:w-22 md:h-16 md:w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${isActive
                             ? "border-[#D7A441] scale-105 opacity-100 shadow-md ring-2 ring-[#D7A441]/50"
                             : "border-transparent opacity-50 hover:opacity-90"
-                        }`}
+                          }`}
                       >
                         <img
                           src={img.cloudinary_url}
@@ -2929,11 +2919,10 @@ function HotelDetails() {
                         onClick={() =>
                           setRoomLightbox((prev) => ({ ...prev, currentIndex: idx }))
                         }
-                        className={`relative h-12 w-16 sm:h-14 sm:w-22 md:h-16 md:w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
-                          isActive
+                        className={`relative h-12 w-16 sm:h-14 sm:w-22 md:h-16 md:w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${isActive
                             ? "border-[#D7A441] scale-105 opacity-100 shadow-md ring-2 ring-[#D7A441]/50"
                             : "border-transparent opacity-50 hover:opacity-90"
-                        }`}
+                          }`}
                       >
                         <img
                           src={imgUrl}

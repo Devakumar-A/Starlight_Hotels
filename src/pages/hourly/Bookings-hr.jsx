@@ -96,7 +96,7 @@ function getHourlyPriceSummary({ ratePerRoom, rooms, guests, signedIn }) {
 // live. If it doesn't exist the page shows an error and never reports
 // a booking as successful.
 // =========================================================
-const HOURLY_BOOKING_RPC = "create_booking_v2";
+const HOURLY_BOOKING_RPC = "create_bookings_v2";
 
 async function createHourlyBooking({
   hotelId,
@@ -122,6 +122,7 @@ async function createHourlyBooking({
     p_rooms_requested: roomsRequested,
     p_guest_name: guestName,
     p_guest_phone: guestPhone,
+    p_guest_address: null,
     p_guest_email: guestEmail,
   });
 

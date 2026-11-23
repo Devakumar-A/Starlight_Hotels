@@ -50,10 +50,10 @@ import {
   getRoomCategoryAmenities,
   getHotels,
   getRoomCategories,
-  getAvailability,
+  getAvailabilityV2,
   getRoomPricing,
   calculateRoomPrice,
-  createBooking,
+  createBookingV2,
   getHotelMedia,
 } from "../services/hotelService";
 import { supabase } from "../lib/supabase";
@@ -711,13 +711,14 @@ function Bookings() {
     try {
       setAvailabilityLoading(true);
       setAvailabilityError("");
-
-      const result = await getAvailability(
+      const result = await getAvailabilityV2({
         hotelId,
-        selectedCheckIn,
-        selectedCheckOut
-      );
-
+        stayType: "full_day",
+        checkInDate: selectedCheckIn,
+        checkOutDate: selectedCheckOut,
+        startTime: null,
+        durationHours: null,
+      });
       const selected = result.find(
         (item) =>
           item.room_category_id === categoryId
@@ -1061,11 +1062,15 @@ function Bookings() {
     setBookingError("");
 
     try {
-      const result = await createBooking({
-        numberOfGuests: guests,
+      const result = await createBookingV2({
+        hotelId: hotelId,
+        roomCategoryId: categoryId,
+        stayType: "full_stay",
         checkInDate: selectedCheckIn,
         checkOutDate: selectedCheckOut,
-        roomCategoryId: categoryId,
+        startTime: null,
+        durationHours: null,
+        numberOfGuests: guests,
         roomsRequested: rooms,
         guestName: guestName.trim(),
         guestPhone: guestPhone.trim(),
@@ -1399,10 +1404,10 @@ function Bookings() {
                                 setCategory(cat);
                               }}
                               className={`rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
-                                  ? "bg-[#171922] text-white shadow-xs"
-                                  : fitsParty
-                                    ? "bg-amber-50 text-[#966A1E] hover:bg-amber-100/80 border border-amber-200/80"
-                                    : "bg-neutral-100/90 text-neutral-700 hover:bg-neutral-200/90 border border-neutral-200/60"
+                                ? "bg-[#171922] text-white shadow-xs"
+                                : fitsParty
+                                  ? "bg-amber-50 text-[#966A1E] hover:bg-amber-100/80 border border-amber-200/80"
+                                  : "bg-neutral-100/90 text-neutral-700 hover:bg-neutral-200/90 border border-neutral-200/60"
                                 }`}
                             >
                               <span>{cat.category_name}</span>
@@ -1477,8 +1482,8 @@ function Bookings() {
                           setActiveDropdown(activeDropdown === "calendar" && calendarTarget === "checkIn" ? null : "calendar");
                         }}
                         className={`group relative flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer ${activeDropdown === "calendar" && calendarTarget === "checkIn"
-                            ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
-                            : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
+                          ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
+                          : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
                           }`}
                       >
                         <div className="min-w-0 flex-1">
@@ -1510,8 +1515,8 @@ function Bookings() {
                           setActiveDropdown(activeDropdown === "calendar" && calendarTarget === "checkOut" ? null : "calendar");
                         }}
                         className={`group relative flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer ${activeDropdown === "calendar" && calendarTarget === "checkOut"
-                            ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
-                            : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
+                          ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
+                          : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
                           }`}
                       >
                         <div className="min-w-0 flex-1">
@@ -1635,8 +1640,8 @@ function Bookings() {
                         type="button"
                         onClick={() => setActiveDropdown(activeDropdown === "guests" ? null : "guests")}
                         className={`group w-full flex items-center justify-between rounded-xl border p-3 text-left transition-all cursor-pointer ${activeDropdown === "guests"
-                            ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
-                            : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
+                          ? "border-[#D7A441] bg-white ring-2 ring-[#D7A441]/25 shadow-xs"
+                          : "border-neutral-200/90 bg-[#FAFAFA] hover:border-[#D7A441]/60 hover:bg-white"
                           }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -1733,8 +1738,8 @@ function Bookings() {
                                       changeGuests(count);
                                     }}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${isSelected
-                                        ? "bg-[#D7A441] text-neutral-950 shadow-xs"
-                                        : "bg-neutral-100/80 text-neutral-700 hover:bg-neutral-200"
+                                      ? "bg-[#D7A441] text-neutral-950 shadow-xs"
+                                      : "bg-neutral-100/80 text-neutral-700 hover:bg-neutral-200"
                                       }`}
                                   >
                                     <span>{count} {count === 1 ? "Guest" : "Guests"}</span>
