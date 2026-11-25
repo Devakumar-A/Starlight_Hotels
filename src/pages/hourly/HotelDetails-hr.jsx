@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-
 import {
   AirVent,
   AlertTriangle,
@@ -65,16 +64,26 @@ const PACKAGES = [3, 6];
 const FIRST_START_HOUR = 9;
 const LAST_START_HOUR = 15;
 
-// Confirmed business rules:
-//   before 12:00 PM  -> 3 and 6 hours
-//   exactly 12:00 PM -> 6 hours only
-//   after 12:00 PM   -> 3 hours only
+// Hourly package rules:
+//   up to and including 1:00 PM -> 3 and 6 hours
+//   after 1:00 PM               -> 3 hours only
 function getAllowedDurations(time) {
-  const [h, m] = String(time || "00:00").split(":").map(Number);
-  const minutes = (h || 0) * 60 + (m || 0);
-  if (minutes === 12 * 60) return [6];
-  if (minutes > 12 * 60) return [3];
-  return PACKAGES;
+  const [hours, minutes] = String(time || "00:00")
+    .split(":")
+    .map(Number);
+
+  const totalMinutes = hours * 60 + minutes;
+
+  return totalMinutes >= 13 * 60 ? [3] : [3, 6];
+}
+
+// The availability RPC may reject a package/time combination with P0001.
+// Treat this expected validation response as unavailable in the UI.
+function isInvalidHourlyBookingTime(err) {
+  return (
+    err?.code === "P0001" &&
+    String(err?.message || "").toLowerCase().includes("invalid hourly booking time")
+  );
 }
 
 function formatDateValue(date) {
@@ -215,15 +224,15 @@ function Lightbox({ images, index, title, onClose, onIndex }) {
     document.addEventListener("fullscreenchange", onChange);
     return () => {
       document.removeEventListener("fullscreenchange", onChange);
-      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => { });
     };
   }, []);
 
   useEffect(() => setLoaded(false), [index]);
 
   const toggleFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    else containerRef.current?.requestFullscreen?.().catch(() => {});
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => { });
+    else containerRef.current?.requestFullscreen?.().catch(() => { });
   };
 
   return (
@@ -302,9 +311,8 @@ function Lightbox({ images, index, title, onClose, onIndex }) {
               key={`${src}-${i}`}
               type="button"
               onClick={() => onIndex(i)}
-              className={`h-12 w-16 sm:h-14 sm:w-20 shrink-0 overflow-hidden rounded-lg border-2 transition cursor-pointer ${
-                i === index ? "border-[#D7A441]" : "border-transparent opacity-60 hover:opacity-100"
-              }`}
+              className={`h-12 w-16 sm:h-14 sm:w-20 shrink-0 overflow-hidden rounded-lg border-2 transition cursor-pointer ${i === index ? "border-[#D7A441]" : "border-transparent opacity-60 hover:opacity-100"
+                }`}
             >
               <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
             </button>
@@ -376,15 +384,21 @@ export default function HotelDetailsHr() {
   const requestedValid = PACKAGES.includes(requestedDuration) && allowedDurations.includes(requestedDuration);
   const durationProblem = Boolean(rawDuration) && !requestedValid;
 
-  // package in effect: valid request, else the only allowed one, else none yet
-  const duration = requestedValid
-    ? requestedDuration
-    : allowedDurations.length === 1
-    ? allowedDurations[0]
-    : null;
-  const activeDurations = duration ? [duration] : allowedDurations;
+  // Package selection is explicit; no package is auto-selected.
+  // A package must always be explicitly selected on a room card.
+  // Keep availability loaded for every package allowed at this check-in time.
+  const duration = requestedValid ? requestedDuration : null;
+  const activeDurations = allowedDurations;
   const activeKey = activeDurations.join(",");
   const checkoutTime = duration ? formatTime12(startTime, duration) : null;
+
+  const [selectedPackages, setSelectedPackages] = useState(() =>
+    requestedValid ? { __all: requestedDuration } : {}
+  );
+
+  useEffect(() => {
+    setSelectedPackages({});
+  }, [stayDate, startTime]);
 
   const [notice, setNotice] = useState("");
   const modifiedRef = useRef(false);
@@ -416,15 +430,12 @@ export default function HotelDetailsHr() {
       return;
     }
     if (durationProblem) {
-      const only = allowedDurations.length === 1 ? allowedDurations[0] : "";
       setNotice(
         PACKAGES.includes(requestedDuration)
-          ? `The ${requestedDuration}-hour package isn't offered for a ${formatTime12(startTime)} check-in. ${
-              only ? `Only the ${only}-hour package is available.` : "Please choose a package."
-            }`
+          ? `The ${requestedDuration}-hour package isn't offered for a ${formatTime12(startTime)} check-in. Please select an available package.`
           : "Please choose a 3 or 6 hour package."
       );
-      updateParams({ duration: only });
+      updateParams({ duration: "" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slotProblem, durationProblem, startTime, rawDuration]);
@@ -588,7 +599,9 @@ export default function HotelDetailsHr() {
       const errByDur = {};
 
       await Promise.all(
-        activeKey.split(",").map(Number).map(async (d) => {
+        (activeKey.split(",").map(Number).filter((d) => {
+          return startTime >= "13:00" ? d === 3 : true;
+        })).map(async (d) => {
           try {
             const data = await getAvailabilityV2({
               hotelId,
@@ -630,7 +643,12 @@ export default function HotelDetailsHr() {
             );
             priceByDur[d] = priceMap;
           } catch (err) {
-            console.error(`HOURLY ${d}H AVAILABILITY ERROR:`, err);
+            // An RPC time-validation rejection means this package cannot be
+            // offered for the selected slot. Keep it unavailable without
+            // surfacing a raw Supabase error to the customer.
+            if (!isInvalidHourlyBookingTime(err)) {
+              console.error(`HOURLY ${d}H AVAILABILITY ERROR:`, err);
+            }
             errByDur[d] = true;
             byDur[d] = {};
             priceByDur[d] = {};
@@ -730,9 +748,8 @@ export default function HotelDetailsHr() {
     const placeId = hotel.google_maps_place_id;
     return {
       displayAddress: parts.length ? parts.join(", ") : null,
-      directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${q}${
-        placeId ? `&destination_place_id=${placeId}` : ""
-      }`,
+      directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${q}${placeId ? `&destination_place_id=${placeId}` : ""
+        }`,
       mapsUrl: `https://www.google.com/maps/search/?api=1&query=${q}${placeId ? `&query_place_id=${placeId}` : ""}`,
       embedMapUrl: q ? `https://maps.google.com/maps?q=${q}&hl=en&z=15&output=embed` : null,
     };
@@ -802,8 +819,25 @@ export default function HotelDetailsHr() {
   const [tTime, setTTime] = useState(startTime);
   const [tDuration, setTDuration] = useState(duration);
   const [tGuests, setTGuests] = useState(guests);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const [y, m] = stayDate.split("-").map(Number);
+    return new Date(y, m - 1, 1);
+  });
 
   const tSlots = getStartSlots(tDate);
+  const calendarYear = calendarMonth.getFullYear();
+  const calendarMonthIndex = calendarMonth.getMonth();
+  const calendarFirstDay = new Date(calendarYear, calendarMonthIndex, 1).getDay();
+  const calendarDays = new Date(calendarYear, calendarMonthIndex + 1, 0).getDate();
+  const calendarCells = [
+    ...Array(calendarFirstDay).fill(null),
+    ...Array.from({ length: calendarDays }, (_, i) => i + 1),
+  ];
+  while (calendarCells.length % 7) calendarCells.push(null);
+  const dateFromParts = (day) =>
+    `${calendarYear}-${String(calendarMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const todayDate = new Date(`${today}T00:00:00`);
   const tAllowed = getAllowedDurations(tTime);
   const tValid =
     tDate >= today &&
@@ -813,6 +847,9 @@ export default function HotelDetailsHr() {
 
   const openModal = () => {
     setTDate(stayDate);
+    const [year, month] = stayDate.split("-").map(Number);
+    setCalendarMonth(new Date(year, month - 1, 1));
+    setCalendarOpen(false);
     setTTime(startTime);
     setTDuration(duration);
     setTGuests(guests);
@@ -822,12 +859,15 @@ export default function HotelDetailsHr() {
   const changeTDate = (value) => {
     if (!value) return;
     setTDate(value);
+    const [year, month] = value.split("-").map(Number);
+    setCalendarMonth(new Date(year, month - 1, 1));
+    setCalendarOpen(false);
     const slots = getStartSlots(value);
     if (slots.length && !slots.includes(tTime)) {
       const nextTime = slots[0];
       setTTime(nextTime);
       const allowed = getAllowedDurations(nextTime);
-      setTDuration((d) => (d && allowed.includes(d) ? d : allowed.length === 1 ? allowed[0] : null));
+      setTDuration((d) => (d && allowed.includes(d) ? d : null));
     }
   };
 
@@ -835,17 +875,18 @@ export default function HotelDetailsHr() {
     setTTime(value);
     const allowed = getAllowedDurations(value);
     // keep the package when still valid, clear it when not
-    setTDuration((d) => (d && allowed.includes(d) ? d : allowed.length === 1 ? allowed[0] : null));
+    setTDuration((d) => (d && allowed.includes(d) ? d : null));
   };
 
   const applyModify = () => {
     if (!tValid) return;
     modifiedRef.current = true;
     setNotice("");
+    setSelectedPackages(tDuration ? { __all: tDuration } : {});
     updateParams({
       stayDate: tDate,
       startTime: tTime,
-      duration: tDuration ?? (tAllowed.length === 1 ? tAllowed[0] : ""),
+      duration: tDuration ?? "",
       guests: tGuests,
     });
     setModalOpen(false);
@@ -877,7 +918,7 @@ export default function HotelDetailsHr() {
       problem = `The ${d}-hour package isn't available for a ${formatTime12(startTime)} check-in.`;
     else if (!view.accommodates)
       problem = `${view.cat.category_name} holds up to ${view.maxGuests} guests. Please change the guest count or pick another room.`;
-    else if (!pd || pd.available < 1) problem = "This room is sold out for the selected slot.";
+    else if (!pd || pd.available < 1) problem = "This package is not available for the selected time.";
     else if (!(pd.price > 0)) problem = "The hourly price for this room could not be confirmed. Please try again.";
 
     if (problem) {
@@ -1176,9 +1217,8 @@ export default function HotelDetailsHr() {
                         key={image.id || index}
                         type="button"
                         onClick={() => setSelectedImage(index)}
-                        className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all cursor-pointer ${
-                          selectedImage === index ? "border-[#D7A441] ring-2 ring-[#D7A441]/40" : "border-transparent opacity-65 hover:opacity-100"
-                        }`}
+                        className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all cursor-pointer ${selectedImage === index ? "border-[#D7A441] ring-2 ring-[#D7A441]/40" : "border-transparent opacity-65 hover:opacity-100"
+                          }`}
                       >
                         <img src={image.cloudinary_url} alt={`Thumbnail ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
                       </button>
@@ -1306,14 +1346,14 @@ export default function HotelDetailsHr() {
                 const { cat } = view;
                 const photos = roomMedia[cat.id] || [];
                 const amenities = roomAmenities[cat.id] || [];
-                const single = duration ? view.perDur[0] : null;
-                const canBook = Boolean(single && single.bookable && view.accommodates);
+                const selectedDuration = selectedPackages[cat.id] ?? selectedPackages.__all ?? null;
+                const selectedPackage = view.perDur.find((p) => p.d === selectedDuration) || null;
+                const canBook = Boolean(selectedPackage?.bookable && view.accommodates);
 
                 let status = null;
-                if (!availLoading) {
-                  if (single?.error) status = "Availability couldn't be checked. Please try again.";
-                  else if (single && single.available < 1) status = "Sold out for this slot";
-                  else if (single && single.available > 0 && !(single.price > 0)) status = "Hourly price unavailable right now";
+                if (!availLoading && selectedPackage) {
+                  if (selectedPackage.error || selectedPackage.available < 1) status = "Not available for selected time";
+                  else if (!(selectedPackage.price > 0)) status = "Hourly price unavailable right now";
                 }
 
                 return (
@@ -1383,11 +1423,10 @@ export default function HotelDetailsHr() {
                               <span className="inline-block h-6 w-36 animate-pulse rounded-full bg-neutral-200" />
                             ) : (
                               <span
-                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                                  view.availableMax > 0
+                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${view.availableMax > 0
                                     ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
                                     : "bg-neutral-100 border border-neutral-200 text-neutral-400"
-                                }`}
+                                  }`}
                               >
                                 {view.availableMax > 0 && (
                                   <span className="relative flex h-1.5 w-1.5">
@@ -1397,7 +1436,7 @@ export default function HotelDetailsHr() {
                                 )}
                                 {view.availableMax > 0
                                   ? `${view.availableMax}${view.total ? ` of ${view.total}` : ""} rooms available`
-                                  : "Sold out for this slot"}
+                                  : "No rooms available for selected time"}
                               </span>
                             )}
                           </div>
@@ -1429,42 +1468,33 @@ export default function HotelDetailsHr() {
                               <div className="h-3 w-24 animate-pulse rounded bg-neutral-200" />
                               <div className="h-8 w-32 animate-pulse rounded bg-neutral-200" />
                             </div>
-                          ) : duration ? (
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{duration}-Hour Rate</p>
-                              {single?.price > 0 && single.available > 0 ? (
-                                <>
-                                  <div className="flex items-baseline gap-1 mt-0.5">
-                                    <span className="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight">₹{single.price.toLocaleString("en-IN")}</span>
-                                    <span className="text-xs text-neutral-500">/ {duration} hours</span>
-                                  </div>
-                                  <p className="text-[11px] font-semibold text-[#B88428] mt-0.5">
-                                    {formatTime12(startTime)} – {checkoutTime}
-                                  </p>
-                                  <p className="text-[10px] text-neutral-400 mt-0.5">Taxes &amp; fees, if any, are shown at booking</p>
-                                </>
-                              ) : (
-                                <p className="mt-1 text-xs font-semibold text-neutral-500">{status || "Unavailable"}</p>
-                              )}
-                            </div>
                           ) : (
                             <div>
                               <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Choose a package</p>
                               <div className="mt-1.5 flex gap-2">
                                 {view.perDur.map((p) => {
-                                  const ok = p.available > 0 && p.price > 0 && view.accommodates;
+                                  const availableForPackage = p.available > 0 && p.price > 0 && view.accommodates;
+                                  const selected = selectedDuration === p.d;
                                   return (
                                     <button
                                       key={p.d}
                                       type="button"
-                                      disabled={!ok}
-                                      onClick={() => updateParams({ duration: p.d })}
-                                      className={`flex-1 rounded-xl border px-3 py-2 text-center transition ${
-                                        ok ? "border-[#EADBCC] bg-white hover:border-[#D7A441] hover:bg-[#FAF5EB] cursor-pointer" : "border-neutral-200 bg-neutral-50 opacity-60 cursor-not-allowed"
-                                      }`}
+                                      disabled={!availableForPackage}
+                                      onClick={() => setSelectedPackages((prev) => ({ ...prev, [cat.id]: p.d }))}
+                                      aria-pressed={selected}
+                                      className={`flex-1 rounded-xl border px-3 py-2 text-center transition ${!availableForPackage
+                                          ? "border-neutral-200 bg-neutral-50 opacity-60 cursor-not-allowed"
+                                          : selected
+                                            ? "border-[#D7A441] bg-[#FAF5EB] ring-1 ring-[#D7A441]/40 cursor-pointer"
+                                            : "border-[#EADBCC] bg-white hover:border-[#D7A441] hover:bg-[#FAF5EB] cursor-pointer"
+                                        }`}
                                     >
-                                      <span className="block text-base font-bold text-neutral-900">{p.price > 0 && p.available > 0 ? `₹${p.price.toLocaleString("en-IN")}` : "—"}</span>
-                                      <span className="block text-[11px] font-semibold text-[#B88428]">{p.d} Hours{!(p.available > 0) ? " · Sold out" : ""}</span>
+                                      <span className="block text-base font-bold text-neutral-900">
+                                        {p.price > 0 ? `₹${p.price.toLocaleString("en-IN")}` : "—"}
+                                      </span>
+                                      <span className="block text-[11px] font-semibold text-[#B88428]">
+                                        {p.d} Hours{p.available < 1 || !(p.price > 0) ? " · Not available for selected time" : ""}
+                                      </span>
                                     </button>
                                   );
                                 })}
@@ -1474,26 +1504,25 @@ export default function HotelDetailsHr() {
 
                           <button
                             type="button"
-                            disabled={!canBook || availLoading}
-                            onClick={() => canBook && handleBook(view, duration)}
-                            className={`group inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-6 text-xs sm:text-sm font-bold shadow-md transition-all w-full ${
-                              canBook && !availLoading
+                            disabled={!selectedDuration || !canBook || availLoading}
+                            onClick={() => canBook && selectedDuration && handleBook(view, selectedDuration)}
+                            className={`group inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-6 text-xs sm:text-sm font-bold shadow-md transition-all w-full ${selectedDuration && canBook && !availLoading
                                 ? "bg-gradient-to-r from-[#D7A441] via-[#E5B555] to-[#B88428] hover:from-[#C89532] hover:to-[#A7751E] text-neutral-950 hover:shadow-xl cursor-pointer"
                                 : "cursor-not-allowed bg-neutral-200 text-neutral-400 shadow-none"
-                            }`}
+                              }`}
                           >
                             <span>
-                              {!duration
-                                ? "Select a package"
+                              {!selectedDuration
+                                ? "Select a package to book a room"
                                 : !view.accommodates
-                                ? "Doesn't fit your party"
-                                : canBook
-                                ? "Book Room"
-                                : single && single.available < 1
-                                ? "Sold Out"
-                                : "Unavailable"}
+                                  ? "Doesn't fit your party"
+                                  : canBook
+                                    ? "Book Room"
+                                    : selectedPackage?.available < 1
+                                      ? "Not available for selected time"
+                                      : "Unavailable"}
                             </span>
-                            {canBook && <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />}
+                            {selectedDuration && canBook && <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />}
                           </button>
                         </div>
                       </div>
@@ -1642,28 +1671,60 @@ export default function HotelDetailsHr() {
             </div>
 
             <div className="px-5 sm:px-6 py-5 space-y-5">
-              <div>
-                <label htmlFor="hr-date" className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-neutral-400">Stay date</label>
-                <div className="flex items-center gap-2.5 rounded-2xl border border-[#EADBCC] px-3.5 py-2.5 focus-within:border-[#D7A441] focus-within:ring-2 focus-within:ring-[#D7A441]/20">
-                  <CalendarDays size={16} className="text-[#9C7335]" />
-                  <input id="hr-date" type="date" min={today} value={tDate} onChange={(e) => changeTDate(e.target.value)} className="w-full bg-transparent text-sm font-semibold text-[#0B1527] outline-none" />
-                </div>
+              <div className="relative">
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-neutral-400">Stay date</label>
+                <button
+                  type="button"
+                  onClick={() => setCalendarOpen((v) => !v)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-[#EADBCC] bg-white px-3.5 py-3 text-left hover:border-[#D7A441] focus:outline-none focus:ring-2 focus:ring-[#D7A441]/20"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FAF3E6] text-[#9C7335]"><CalendarDays size={17} /></span>
+                  <span className="flex-1 text-sm font-semibold text-[#0B1527]">{formatLongDate(tDate)}</span>
+                  <ChevronRight size={17} className={`text-neutral-400 transition-transform ${calendarOpen ? "rotate-90" : ""}`} />
+                </button>
+                {calendarOpen && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-2xl border border-[#EADBCC] bg-white p-2 sm:p-3 lg:p-2 shadow-xl lg:max-w-[440px] lg:left-1/2 lg:-translate-x-1/2">
+                    <div className="flex items-center justify-between gap-2">
+                      <button type="button" onClick={() => setCalendarMonth(new Date(calendarYear, calendarMonthIndex - 1, 1))} disabled={calendarYear === todayDate.getFullYear() && calendarMonthIndex <= todayDate.getMonth()} className="rounded-lg p-2 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 cursor-pointer" aria-label="Previous month"><ChevronLeft size={17} /></button>
+                      <p className="text-sm font-bold text-[#0B1527]">{MONTHS[calendarMonthIndex]} {calendarYear}</p>
+                      <button type="button" onClick={() => setCalendarMonth(new Date(calendarYear, calendarMonthIndex + 1, 1))} className="rounded-lg p-2 text-neutral-600 hover:bg-neutral-100 cursor-pointer" aria-label="Next month"><ChevronRight size={17} /></button>
+                    </div>
+                    <div className="mt-1 grid grid-cols-7 gap-0.5 lg:gap-1 text-center">
+                      {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => <span key={d} className="py-1 text-[10px] font-semibold text-neutral-400">{d}</span>)}
+                      {calendarCells.map((day, i) => {
+                        if (!day) return <span key={`blank-${i}`} />;
+                        const value = dateFromParts(day);
+                        const disabled = value < today;
+                        const selected = value === tDate;
+                        return (
+                          <button key={value} type="button" disabled={disabled} onClick={() => changeTDate(value)} className={`h-9 lg:h-8 rounded-lg text-xs font-medium transition ${selected ? "bg-[#D7A441] text-neutral-950 font-bold" : disabled ? "text-neutral-300 cursor-not-allowed" : "text-neutral-700 hover:bg-[#FAF5EB] cursor-pointer"}`}>
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-neutral-100 pt-2">
+                      <button type="button" onClick={() => changeTDate(today)} className="text-xs font-semibold text-[#9C7335] hover:underline cursor-pointer">Today</button>
+                      <button type="button" onClick={() => setCalendarOpen(false)} className="text-xs font-semibold text-[#9C7335] hover:underline cursor-pointer">Done</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
-                <label htmlFor="hr-time" className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-neutral-400">Check-in time</label>
+                <p className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-neutral-400">Check-in time</p>
                 {tSlots.length === 0 ? (
-                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
-                    No more check-in times today. Please choose another date.
-                  </p>
+                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">No more check-in times today. Please choose another date.</p>
                 ) : (
-                  <div className="flex items-center gap-2.5 rounded-2xl border border-[#EADBCC] px-3.5 py-2.5 focus-within:border-[#D7A441] focus-within:ring-2 focus-within:ring-[#D7A441]/20">
-                    <Clock size={16} className="text-[#9C7335]" />
-                    <select id="hr-time" value={tTime} onChange={(e) => changeTTime(e.target.value)} className="w-full bg-transparent text-sm font-semibold text-[#0B1527] outline-none cursor-pointer">
-                      {tSlots.map((s) => (
-                        <option key={s} value={s}>{formatTime12(s)}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {tSlots.map((slot) => {
+                      const selected = tTime === slot;
+                      return (
+                        <button key={slot} type="button" onClick={() => changeTTime(slot)} aria-pressed={selected} className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition ${selected ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E] ring-1 ring-[#D7A441]/30" : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441] cursor-pointer"}`}>
+                          {formatTime12(slot)}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1680,23 +1741,22 @@ export default function HotelDetailsHr() {
                         type="button"
                         disabled={disabled}
                         onClick={() => setTDuration(d)}
-                        className={`flex-1 rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${
-                          disabled
+                        className={`flex-1 rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${disabled
                             ? "border-neutral-200 bg-neutral-50 text-neutral-300 cursor-not-allowed"
                             : active
-                            ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E] cursor-pointer"
-                            : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60 cursor-pointer"
-                        }`}
+                              ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E] cursor-pointer"
+                              : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60 cursor-pointer"
+                          }`}
                       >
-                        {d ? `${d} Hours` : "Show both"}
+                        {d ? `${d} Hours` : "Both"}
                       </button>
                     );
                   })}
                 </div>
                 <p className="mt-2 text-[11px] text-[#8B651B]">
                   {tAllowed.length === 1
-                    ? `For a ${formatTime12(tTime)} check-in, only the ${tAllowed[0]}-hour package is offered.`
-                    : "Check-ins before 12:00 PM can choose 3 or 6 hours."}
+                    ? `After 1:00 PM, only the ${tAllowed[0]}-hour package is available.`
+                    : "Check-ins up to and including 1:00 PM can choose either package."}
                 </p>
               </div>
 

@@ -62,7 +62,77 @@ const HERO_IMAGES = [
   { src: pondicherry02, alt: "Pondicherry Promenade" },
   { src: kodaikanal02, alt: "Kodaikanal Valley View" },
 ];
+const HOURLY_TIME_SLOTS = [
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+];
 
+const getISTDateTime = () => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+
+  return Object.fromEntries(
+    parts.filter((p) => p.type !== "literal").map((p) => [p.type, p.value])
+  );
+};
+
+const getISTDateString = () => {
+  const t = getISTDateTime();
+  return `${t.year}-${t.month}-${t.day}`;
+};
+
+const getAvailableHourlySlots = (date) => {
+  const now = getISTDateTime();
+  const today = getISTDateString();
+
+  if (date > today) return HOURLY_TIME_SLOTS;
+  if (date < today) return [];
+
+  const currentMinutes = Number(now.hour) * 60 + Number(now.minute);
+
+  return HOURLY_TIME_SLOTS.filter((slot) => {
+    const [h, m] = slot.split(":").map(Number);
+    return h * 60 + m > currentMinutes;
+  });
+};
+
+const getNextHourlySlot = (date) => {
+  return getAvailableHourlySlots(date)[0] || "";
+};
+const getNextAvailableHourlyBooking = (startDate, preferredTime = "") => {
+  let date = startDate || getISTDateString();
+
+  for (let i = 0; i < 366; i++) {
+    const availableSlots = getAvailableHourlySlots(date);
+
+    const time =
+      i === 0 && preferredTime && availableSlots.includes(preferredTime)
+        ? preferredTime
+        : availableSlots[0];
+
+    if (time) {
+      return { date, time };
+    }
+
+    const nextDate = new Date(`${date}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    date = nextDate.toISOString().slice(0, 10);
+  }
+
+  return null;
+};
 const DESTINATIONS = [
   // ============================================================
   // CITIES (from Footer Directory)
@@ -284,7 +354,9 @@ export default function Hero({ onSearch, stayType, setStayType }) {
   const [checkOutDate, setCheckOutDate] = useState("");
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
-  const [hourlyStartTime, setHourlyStartTime] = useState("14:00");
+  const [hourlyStartTime, setHourlyStartTime] = useState(
+    () => getNextHourlySlot(getISTDateString())
+  );
   // Dropdown open states
   const [activeDropdown, setActiveDropdown] = useState(null); // 'location' | 'calendar' | 'guests' | null
   const [calendarTarget, setCalendarTarget] = useState("checkIn"); // 'checkIn' | 'checkOut'
@@ -378,17 +450,22 @@ export default function Hero({ onSearch, stayType, setStayType }) {
 
     // HOURLY SEARCH
     if (stayType === "hourly") {
-      const now = new Date();
-      const today = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, "0"),
-        String(now.getDate()).padStart(2, "0"),
-      ].join("-");
+      const booking = getNextAvailableHourlyBooking(
+        checkInDate || getISTDateString(),
+        hourlyStartTime
+      );
 
-      params.set("stayDate", checkInDate || today);
-      params.set("startTime", hourlyStartTime);
-      params.set("duration", "3");
-      params.set("guests", String(totalGuests || 2));
+      if (!booking) return;
+
+      // Update the displayed selections
+      setCheckInDate(booking.date);
+      setCheckOutDate("");
+      setHourlyStartTime(booking.time);
+
+      params.set("stayDate", booking.date);
+      params.set("startTime", booking.time);
+      params.set("duration", "2");
+      params.set("guests", "2");
 
       if (finalLocation) params.set("location", finalLocation);
       if (finalHotelId) params.set("hotel", finalHotelId);
@@ -396,7 +473,6 @@ export default function Hero({ onSearch, stayType, setStayType }) {
       navigate(`/hourly-availability?${params.toString()}`);
       return;
     }
-
     // EXISTING FULL-DAY SEARCH — unchanged
     if (finalLocation) params.set("location", finalLocation);
     if (finalHotelId) params.set("hotel", finalHotelId);
@@ -439,6 +515,9 @@ export default function Hero({ onSearch, stayType, setStayType }) {
       setCheckInDate(dateStr);
       setCheckOutDate("");
 
+      // Automatically select the next available slot for this date
+      setHourlyStartTime(getNextHourlySlot(dateStr));
+
       setCalendarTarget("checkIn");
 
       if (mobileSearchModalOpen) {
@@ -449,7 +528,6 @@ export default function Hero({ onSearch, stayType, setStayType }) {
 
       return;
     }
-
     // EXISTING FULL-DAY FLOW — unchanged
     if (!checkInDate || (checkInDate && checkOutDate)) {
       setCheckInDate(dateStr);
@@ -527,6 +605,11 @@ export default function Hero({ onSearch, stayType, setStayType }) {
             const isCheckIn = dateStr === checkInDate;
             const isCheckOut = dateStr === checkOutDate;
             const isInRange = checkInDate && checkOutDate && dateStr > checkInDate && dateStr < checkOutDate;
+            const isInvalidCheckOut =
+              stayType === "full_day" &&
+              calendarTarget === "checkOut" &&
+              checkInDate &&
+              dateStr <= checkInDate;
 
             // SQUARE SELECTED DESIGN (rounded-md, distinct edges, gold fill, NOT circular)
             let btnClass = "relative z-10 h-8 w-8 mx-auto flex items-center justify-center transition-all text-xs font-semibold ";
@@ -535,7 +618,7 @@ export default function Hero({ onSearch, stayType, setStayType }) {
               btnClass += "rounded-md bg-[#D7A441] text-neutral-950 font-bold shadow-[0_2px_12px_rgba(215,164,65,0.7)] ring-1 ring-white/40";
             } else if (isInRange) {
               btnClass += "rounded-none w-full bg-[#D7A441]/25 text-[#F5C869] font-medium";
-            } else if (isPast) {
+            } else if (isPast || isInvalidCheckOut) {
               btnClass += "rounded-md text-white/20 cursor-not-allowed";
             } else {
               btnClass += "rounded-md text-white/90 hover:bg-white/15 hover:text-white cursor-pointer";
@@ -556,7 +639,7 @@ export default function Hero({ onSearch, stayType, setStayType }) {
 
                 <button
                   type="button"
-                  disabled={isPast}
+                  disabled={isPast || isInvalidCheckOut}
                   onClick={() => handleDateClick(dateStr)}
                   className={btnClass}
                   aria-label={dateStr}
@@ -690,32 +773,45 @@ export default function Hero({ onSearch, stayType, setStayType }) {
         </div>
 
         {/* =====================================================
-            SPACIOUS FROSTED GLASS CAPSULE SEARCH BAR (DESKTOP ONLY)
-        ===================================================== */}
-        <div className="flex-nowrap items-center">
+    COMPACT HOURLY / FULL-DAY SWITCH
+===================================================== */}
+        <div className="mt-4 md:mt-0 flex w-fit max-w-full items-center gap-1 rounded-full border border-white/20 bg-black/60 p-1.5 backdrop-blur-md">
+
           <button
             type="button"
             onClick={() => setStayType("hourly")}
-            className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition-all duration-300 ${stayType === "hourly"
-              ? "bg-[#D7A441] text-neutral-950 shadow-[0_0_20px_rgba(215,164,65,0.55)] ring-1 ring-[#F5C869]"
-              : "bg-black/50 text-white border border-white/20 hover:bg-white/10"
+            className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-xs sm:text-sm font-bold transition-all duration-300 ${stayType === "hourly"
+              ? "bg-[#D7A441] text-neutral-950 shadow-[0_0_14px_rgba(215,164,65,0.35)]"
+              : "text-white hover:bg-white/10"
               }`}
           >
-            ⚡ Hourly Stay
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            Hourly Stay
           </button>
 
           <button
             type="button"
             onClick={() => setStayType("full_day")}
-            className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition-all duration-300 ${stayType === "full_day"
-              ? "bg-[#D7A441] text-neutral-950 shadow-[0_0_20px_rgba(215,164,65,0.55)] ring-1 ring-[#F5C869]"
-              : "bg-black/50 text-white border border-white/20 hover:bg-white/10"
+            className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-xs sm:text-sm font-bold transition-all duration-300 ${stayType === "full_day"
+              ? "bg-[#D7A441] text-neutral-950 shadow-[0_0_14px_rgba(215,164,65,0.35)]"
+              : "text-white hover:bg-white/10"
               }`}
           >
             ☀ Full-Day Stay
           </button>
-        </div>
 
+        </div>
         <div ref={containerRef} className="relative mt-6 sm:mt-8 w-full max-w-5xl lg:max-w-6xl hidden lg:block">
           <form
             onSubmit={handleSearchSubmit}
@@ -894,12 +990,14 @@ export default function Hero({ onSearch, stayType, setStayType }) {
                         Check-in Time
                       </span>
                       <span className="block text-sm lg:text-base font-bold text-white mt-1">
-                        {(() => {
-                          const [h, m] = hourlyStartTime.split(":").map(Number);
-                          const period = h >= 12 ? "PM" : "AM";
-                          const hour = h % 12 || 12;
-                          return `${String(hour).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
-                        })()}
+                        {hourlyStartTime
+                          ? (() => {
+                            const [h, m] = hourlyStartTime.split(":").map(Number);
+                            const period = h >= 12 ? "PM" : "AM";
+                            const hour = h % 12 || 12;
+                            return `${String(hour).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
+                          })()
+                          : "Select Time"}
                       </span>
                     </div>
 
@@ -940,6 +1038,7 @@ export default function Hero({ onSearch, stayType, setStayType }) {
                           const [h, m] = time.split(":").map(Number);
                           const label = `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
                           const selected = hourlyStartTime === time;
+                          const disabled = !getAvailableHourlySlots(checkInDate || getISTDateString()).includes(time);
 
                           return (
                             <button
@@ -949,9 +1048,12 @@ export default function Hero({ onSearch, stayType, setStayType }) {
                                 setHourlyStartTime(time);
                                 setActiveDropdown("guests");
                               }}
-                              className={`rounded-xl py-3 text-xs sm:text-sm font-semibold transition-all duration-200 ${selected
-                                ? "bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] text-neutral-950 shadow-[0_0_18px_rgba(215,164,65,0.4)] ring-1 ring-[#F5C869]"
-                                : "bg-white/[0.05] border border-white/10 text-white/80 hover:bg-[#D7A441]/15 hover:border-[#D7A441]/40 hover:text-[#E2B755]"
+                              disabled={disabled}
+                              className={`rounded-xl py-3 text-xs sm:text-sm font-semibold transition-all duration-200 ${disabled
+                                ? "bg-white/[0.02] border border-white/5 text-white/20 cursor-not-allowed opacity-40"
+                                : selected
+                                  ? "bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] text-neutral-950 shadow-[0_0_18px_rgba(215,164,65,0.4)] ring-1 ring-[#F5C869]"
+                                  : "bg-white/[0.05] border border-white/10 text-white/80 hover:bg-[#D7A441]/15 hover:border-[#D7A441]/40 hover:text-[#E2B755]"
                                 }`}
                             >
                               {label}
@@ -1380,10 +1482,12 @@ export default function Hero({ onSearch, stayType, setStayType }) {
                 </span>
                 <span className="block text-[11px] font-bold truncate text-white mt-0.5">
                   {stayType === "hourly"
-                    ? (() => {
-                      const h = Number(hourlyStartTime.split(":")[0]);
-                      return `${String(h % 12 || 12).padStart(2, "0")}:00 ${h >= 12 ? "PM" : "AM"}`;
-                    })()
+                    ? hourlyStartTime
+                      ? (() => {
+                        const h = Number(hourlyStartTime.split(":")[0]);
+                        return `${String(h % 12 || 12).padStart(2, "0")}:00 ${h >= 12 ? "PM" : "AM"}`;
+                      })()
+                      : "Select Time"
                     : checkOutDate
                       ? formatDateDisplay(checkOutDate).split(" ").slice(0, 2).join(" ")
                       : "Add date"}
@@ -1575,6 +1679,9 @@ export default function Hero({ onSearch, stayType, setStayType }) {
                       const [h, m] = time.split(":").map(Number);
                       const label = `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
                       const selected = hourlyStartTime === time;
+                      const disabled = !getAvailableHourlySlots(
+                        checkInDate || getISTDateString()
+                      ).includes(time);
 
                       return (
                         <button
@@ -1584,9 +1691,12 @@ export default function Hero({ onSearch, stayType, setStayType }) {
                             setHourlyStartTime(time);
                             setMobileTab("guests");
                           }}
-                          className={`rounded-xl py-3 text-xs font-semibold transition-all duration-200 ${selected
-                            ? "bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] text-neutral-950 shadow-[0_0_18px_rgba(215,164,65,0.4)] ring-1 ring-[#F5C869]"
-                            : "bg-white/[0.05] border border-white/10 text-white/80 hover:bg-[#D7A441]/15 hover:border-[#D7A441]/40 hover:text-[#E2B755]"
+                          disabled={disabled}
+                          className={`rounded-xl py-3 text-xs font-semibold transition-all ${disabled
+                            ? "bg-white/[0.02] border border-white/5 text-white/20 cursor-not-allowed opacity-40"
+                            : selected
+                              ? "bg-gradient-to-r from-[#D7A441] via-[#E2B755] to-[#C5922C] text-neutral-950"
+                              : "bg-white/[0.05] border border-white/10 text-white/80 hover:bg-[#D7A441]/15"
                             }`}
                         >
                           {label}

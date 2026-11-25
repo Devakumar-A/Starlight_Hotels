@@ -146,12 +146,14 @@ const PACKAGES = [3, 6];
 const FIRST_START_HOUR = 9;
 const LAST_START_HOUR = 15;
 
-// before 12:00 PM -> 3h and 6h | exactly 12:00 PM -> 6h only | after 12:00 PM -> 3h only
+// 9:00 AM through 12:00 PM -> 3h and 6h
+// After 12:00 PM -> 3h only
 function getAllowedDurations(time) {
   const [h, m] = String(time || "00:00").split(":").map(Number);
   const minutes = (h || 0) * 60 + (m || 0);
-  if (minutes === 12 * 60) return [6];
+
   if (minutes > 12 * 60) return [3];
+
   return PACKAGES;
 }
 
@@ -239,17 +241,37 @@ const controlClass =
 // =========================================================
 
 export default function BookingsHr() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // ---------------- booking data passed from HotelDetails-hr ----------------
-  const hotelId = searchParams.get("hotel") || "";
-  const categoryId = searchParams.get("category") || "";
-  const stayDate = searchParams.get("stayDate") || searchParams.get("date") || "";
-  const startTime = searchParams.get("startTime") || "";
-  const guests = Math.max(1, Number(searchParams.get("guests")) || 1);
-  const rooms = Math.max(1, Number(searchParams.get("rooms")) || 1);
-  const rawDuration = Number(searchParams.get("duration")) || null;
+  // Keep booking modifiers in React state
+  const [bookingParams, setBookingParams] = useState(() => ({
+    hotel: searchParams.get("hotel") || "",
+    category: searchParams.get("category") || "",
+    stayDate: searchParams.get("stayDate") || searchParams.get("date") || "",
+    startTime: searchParams.get("startTime") || "",
+    guests: Math.max(1, Number(searchParams.get("guests")) || 1),
+    rooms: Math.max(1, Number(searchParams.get("rooms")) || 1),
+    duration: Number(searchParams.get("duration")) || null,
+  }));
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
+
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const initial = bookingParams.stayDate
+      ? new Date(`${bookingParams.stayDate}T12:00:00`)
+      : new Date();
+
+    return new Date(initial.getFullYear(), initial.getMonth(), 1);
+  });
+  // ---------------- booking data ----------------
+  const hotelId = bookingParams.hotel;
+  const categoryId = bookingParams.category;
+  const stayDate = bookingParams.stayDate;
+  const startTime = bookingParams.startTime;
+  const guests = bookingParams.guests;
+  const rooms = bookingParams.rooms;
+  const rawDuration = bookingParams.duration;
 
   const today = formatDateValue(new Date());
   const slotProblem = useMemo(() => getSlotProblem(stayDate, startTime), [stayDate, startTime]);
@@ -261,29 +283,40 @@ export default function BookingsHr() {
   const duration = requestedValid
     ? rawDuration
     : allowedDurations.length === 1
-    ? allowedDurations[0]
-    : null;
+      ? allowedDurations[0]
+      : null;
   const checkoutTime = duration ? formatTime12(startTime, duration) : null;
 
-  const updateParams = useCallback(
-    (updates) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          Object.entries(updates).forEach(([key, value]) => {
-            if (value === "" || value === null || value === undefined) next.delete(key);
-            else next.set(key, String(value));
-          });
-          if ("stayDate" in updates) next.delete("date");
-          next.set("stayType", "hourly");
-          return next;
-        },
-        { replace: true }
-      );
-    },
-    [setSearchParams]
-  );
+  const updateParams = useCallback((updates) => {
+    // Update React state so the UI responds immediately
+    setBookingParams((prev) => ({
+      ...prev,
+      ...updates,
+    }));
 
+    // Update the URL without triggering React Router navigation
+    const next = new URLSearchParams(window.location.search);
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === "" || value === null || value === undefined) {
+        next.delete(key);
+      } else {
+        next.set(key, String(value));
+      }
+    });
+
+    if ("stayDate" in updates) next.delete("date");
+
+    next.set("stayType", "hourly");
+
+    const query = next.toString();
+
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`
+    );
+  }, []);
   // ---------------- state ----------------
   const [hotel, setHotel] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -338,9 +371,8 @@ export default function BookingsHr() {
     const only = allowedDurations.length === 1 ? allowedDurations[0] : "";
     setNotice(
       PACKAGES.includes(rawDuration)
-        ? `The ${rawDuration}-hour package isn't offered for a ${formatTime12(startTime)} check-in. ${
-            only ? `Only the ${only}-hour package is available.` : "Please choose a package."
-          }`
+        ? `The ${rawDuration}-hour package isn't offered for a ${formatTime12(startTime)} check-in. ${only ? `Only the ${only}-hour package is available.` : "Please choose a package."
+        }`
         : "Please choose a 3 or 6 hour package."
     );
     updateParams({ duration: only });
@@ -696,7 +728,28 @@ export default function BookingsHr() {
 
   // ---------------- search modifiers ----------------
   const slotsForDate = getStartSlots(stayDate);
+  const calendarDays = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
 
+    const firstDay = new Date(year, month, 1);
+    const startOffset = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    return [
+      ...Array(startOffset).fill(null),
+      ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    ];
+  }, [calendarMonth]);
+
+  const selectedDate = stayDate
+    ? new Date(`${stayDate}T12:00:00`)
+    : null;
+
+  const calendarMonthLabel = calendarMonth.toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
   function applySlotChange({ nextDate = stayDate, nextTime = startTime, nextDuration = duration }) {
     const slots = getStartSlots(nextDate);
     if (nextDate < today || slots.length === 0) {
@@ -710,9 +763,8 @@ export default function BookingsHr() {
 
     setNotice(
       nextDuration && !allowed.includes(nextDuration)
-        ? `The ${nextDuration}-hour package isn't offered for a ${formatTime12(time)} check-in.${
-            keep ? ` Switched to the ${keep}-hour package.` : " Please choose a package."
-          }`
+        ? `The ${nextDuration}-hour package isn't offered for a ${formatTime12(time)} check-in.${keep ? ` Switched to the ${keep}-hour package.` : " Please choose a package."
+        }`
         : ""
     );
     setBookingError("");
@@ -1068,9 +1120,8 @@ export default function BookingsHr() {
                         type="button"
                         onClick={() => setPhotoIndex(i)}
                         aria-label={`Show photo ${i + 1}`}
-                        className={`h-12 w-16 shrink-0 overflow-hidden rounded-lg border-2 cursor-pointer ${
-                          i === photoIndex ? "border-[#D7A441]" : "border-transparent opacity-70 hover:opacity-100"
-                        }`}
+                        className={`h-12 w-16 shrink-0 overflow-hidden rounded-lg border-2 cursor-pointer ${i === photoIndex ? "border-[#D7A441]" : "border-transparent opacity-70 hover:opacity-100"
+                          }`}
                       >
                         <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </button>
@@ -1093,19 +1144,18 @@ export default function BookingsHr() {
                     <p className="mt-2 text-xs sm:text-sm text-neutral-600 leading-relaxed max-w-2xl">{category.description}</p>
                   )}
                   <span
-                    className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                      slotLoading
-                        ? "bg-neutral-100 text-neutral-400"
-                        : availableRooms > 0
+                    className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${slotLoading
+                      ? "bg-neutral-100 text-neutral-400"
+                      : availableRooms > 0
                         ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
                         : "bg-neutral-100 border border-neutral-200 text-neutral-500"
-                    }`}
+                      }`}
                   >
                     {slotLoading
                       ? "Checking availability…"
                       : availableRooms > 0
-                      ? `${availableRooms}${selectedSlot?.total ? ` of ${selectedSlot.total}` : ""} rooms available for your slot`
-                      : "Not available for this slot"}
+                        ? `${availableRooms}${selectedSlot?.total ? ` of ${selectedSlot.total}` : ""} rooms available for your slot`
+                        : "Not available for this slot"}
                   </span>
                 </div>
 
@@ -1125,15 +1175,14 @@ export default function BookingsHr() {
                             type="button"
                             onClick={() => switchCategory(cat.id)}
                             aria-pressed={isSelected}
-                            className={`rounded-xl px-3.5 py-2 min-h-[40px] text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                              isSelected
-                                ? "bg-[#171922] text-white shadow-xs"
-                                : catSoldOut
+                            className={`rounded-xl px-3.5 py-2 min-h-[40px] text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
+                              ? "bg-[#171922] text-white shadow-xs"
+                              : catSoldOut
                                 ? "bg-neutral-100/90 text-neutral-400 border border-neutral-200/60"
                                 : fits
-                                ? "bg-amber-50 text-[#966A1E] hover:bg-amber-100/80 border border-amber-200/80"
-                                : "bg-neutral-100/90 text-neutral-700 hover:bg-neutral-200/90 border border-neutral-200/60"
-                            }`}
+                                  ? "bg-amber-50 text-[#966A1E] hover:bg-amber-100/80 border border-amber-200/80"
+                                  : "bg-neutral-100/90 text-neutral-700 hover:bg-neutral-200/90 border border-neutral-200/60"
+                              }`}
                           >
                             <span>{cat.category_name}</span>
                             {catSoldOut ? (
@@ -1183,24 +1232,274 @@ export default function BookingsHr() {
                   </div>
 
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
-                    <label className="block rounded-xl border border-neutral-200/90 bg-[#FAFAFA] p-3.5 hover:border-[#D7A441]/60 focus-within:border-[#D7A441] focus-within:ring-2 focus-within:ring-[#D7A441]/20 transition cursor-pointer">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Stay Date</span>
-                      <div className="mt-1 flex items-center gap-2">
-                        <CalendarDays size={16} className="text-[#D7A441] shrink-0" />
-                        <input type="date" min={today} value={stayDate} onChange={(e) => changeDate(e.target.value)} className={controlClass} aria-label="Stay date" />
+
+                    {/* CUSTOM STAY DATE CALENDAR */}
+                    <div className="relative min-w-0">
+                      <div
+                        className={`rounded-xl border bg-[#FAFAFA] p-3.5 transition ${calendarOpen
+                            ? "border-[#D7A441] ring-2 ring-[#D7A441]/20"
+                            : "border-neutral-200/90 hover:border-[#D7A441]/60"
+                          }`}
+                      >
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                          Stay Date
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCalendarOpen((v) => !v);
+                            setTimeOpen(false);
+                          }}
+                          className="mt-1 flex w-full min-w-0 items-center gap-2 text-left cursor-pointer"
+                          aria-label="Choose stay date"
+                          aria-expanded={calendarOpen}
+                        >
+                          <CalendarDays size={17} className="text-[#D7A441] shrink-0" />
+
+                          <span className="flex-1 min-w-0 truncate text-sm font-semibold text-neutral-900">
+                            {selectedDate
+                              ? selectedDate.toLocaleDateString("en-GB", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })
+                              : "Select date"}
+                          </span>
+
+                          <ChevronRight
+                            size={16}
+                            className={`text-neutral-500 transition-transform ${calendarOpen ? "-rotate-90" : "rotate-90"
+                              }`}
+                          />
+                        </button>
                       </div>
-                    </label>
-                    <label className="block rounded-xl border border-neutral-200/90 bg-[#FAFAFA] p-3.5 hover:border-[#D7A441]/60 focus-within:border-[#D7A441] focus-within:ring-2 focus-within:ring-[#D7A441]/20 transition cursor-pointer">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Check-in Time</span>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Clock size={16} className="text-[#D7A441] shrink-0" />
-                        <select value={startTime} onChange={(e) => changeTime(e.target.value)} className={controlClass} aria-label="Check-in time">
-                          {slotsForDate.map((s) => (
-                            <option key={s} value={s}>{formatTime12(s)}</option>
-                          ))}
-                        </select>
+
+                      {calendarOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-2 w-[min(320px,calc(100vw-48px))] rounded-2xl border border-neutral-200 bg-white p-3 shadow-xl">
+
+                          {/* MONTH NAVIGATION */}
+                          <div className="mb-3 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCalendarMonth(
+                                  (prev) =>
+                                    new Date(
+                                      prev.getFullYear(),
+                                      prev.getMonth() - 1,
+                                      1
+                                    )
+                                )
+                              }
+                              disabled={
+                                calendarMonth.getFullYear() ===
+                                new Date(today + "T12:00:00").getFullYear() &&
+                                calendarMonth.getMonth() ===
+                                new Date(today + "T12:00:00").getMonth()
+                              }
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-50 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                              aria-label="Previous month"
+                            >
+                              <ChevronRight className="rotate-180" size={17} />
+                            </button>
+
+                            <span className="text-sm font-bold text-neutral-900">
+                              {calendarMonthLabel}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCalendarMonth(
+                                  (prev) =>
+                                    new Date(
+                                      prev.getFullYear(),
+                                      prev.getMonth() + 1,
+                                      1
+                                    )
+                                )
+                              }
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                              aria-label="Next month"
+                            >
+                              <ChevronRight size={17} />
+                            </button>
+                          </div>
+
+                          {/* WEEKDAYS */}
+                          <div className="grid grid-cols-7 mb-1">
+                            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+                              <div
+                                key={day}
+                                className="py-2 text-center text-[11px] font-semibold text-neutral-400"
+                              >
+                                {day}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* CALENDAR DAYS */}
+                          <div className="grid grid-cols-7 gap-y-1">
+                            {calendarDays.map((day, index) => {
+                              if (!day) {
+                                return <div key={`empty-${index}`} />;
+                              }
+
+                              const date = new Date(
+                                calendarMonth.getFullYear(),
+                                calendarMonth.getMonth(),
+                                day
+                              );
+
+                              const dateValue = formatDateValue(date);
+                              const disabled = dateValue < today;
+                              const selected = dateValue === stayDate;
+                              const isToday = dateValue === today;
+
+                              return (
+                                <button
+                                  key={dateValue}
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => {
+                                    changeDate(dateValue);
+                                    setCalendarOpen(false);
+                                  }}
+                                  className={`mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-xs transition
+                  ${selected
+                                      ? "bg-[#D7A441] text-white font-bold shadow-sm"
+                                      : isToday
+                                        ? "border border-[#D7A441] text-[#966A1E] font-semibold"
+                                        : disabled
+                                          ? "text-neutral-300 cursor-not-allowed"
+                                          : "text-neutral-700 hover:bg-[#FAF5EB] hover:text-[#966A1E] cursor-pointer"
+                                    }`}
+                                >
+                                  {day}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* CALENDAR FOOTER */}
+                          <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCalendarMonth(
+                                  new Date(
+                                    new Date(today + "T12:00:00").getFullYear(),
+                                    new Date(today + "T12:00:00").getMonth(),
+                                    1
+                                  )
+                                );
+                                setCalendarOpen(false);
+                              }}
+                              className="text-xs font-semibold text-neutral-500 hover:text-neutral-900 cursor-pointer"
+                            >
+                              Close
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                changeDate(today);
+                                setCalendarMonth(
+                                  new Date(
+                                    new Date(today + "T12:00:00").getFullYear(),
+                                    new Date(today + "T12:00:00").getMonth(),
+                                    1
+                                  )
+                                );
+                                setCalendarOpen(false);
+                              }}
+                              className="text-xs font-semibold text-[#B88428] hover:text-[#966A1E] cursor-pointer"
+                            >
+                              Today
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CUSTOM CHECK-IN TIME SELECTOR */}
+                    <div className="relative min-w-0">
+                      <div
+                        className={`rounded-xl border bg-[#FAFAFA] p-3.5 transition ${timeOpen
+                            ? "border-[#D7A441] ring-2 ring-[#D7A441]/20"
+                            : "border-neutral-200/90 hover:border-[#D7A441]/60"
+                          }`}
+                      >
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                          Check-in Time
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimeOpen((v) => !v);
+                            setCalendarOpen(false);
+                          }}
+                          className="mt-1 flex w-full min-w-0 items-center gap-2 text-left cursor-pointer"
+                          aria-label="Choose check-in time"
+                          aria-expanded={timeOpen}
+                        >
+                          <Clock size={17} className="text-[#D7A441] shrink-0" />
+
+                          <span className="flex-1 text-sm font-semibold text-neutral-900">
+                            {formatTime12(startTime)}
+                          </span>
+
+                          <ChevronRight
+                            size={16}
+                            className={`text-neutral-500 transition-transform ${timeOpen ? "-rotate-90" : "rotate-90"
+                              }`}
+                          />
+                        </button>
                       </div>
-                    </label>
+
+                      {timeOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-2 w-full min-w-[180px] rounded-xl border border-neutral-200 bg-white p-2 shadow-xl">
+                          <p className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                            Available check-in times
+                          </p>
+
+                          <div className="max-h-56 space-y-1 overflow-y-auto">
+                            {slotsForDate.map((slot) => {
+                              const active = slot === startTime;
+
+                              return (
+                                <button
+                                  key={slot}
+                                  type="button"
+                                  onClick={() => {
+                                    changeTime(slot);
+                                    setTimeOpen(false);
+                                  }}
+                                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm transition cursor-pointer ${active
+                                      ? "bg-[#FAF5EB] text-[#966A1E] font-bold"
+                                      : "text-neutral-700 hover:bg-neutral-50"
+                                    }`}
+                                >
+                                  {formatTime12(slot)}
+
+                                  {active && (
+                                    <Check size={15} className="text-[#B88428]" />
+                                  )}
+                                </button>
+                              );
+                            })}
+
+                            {slotsForDate.length === 0 && (
+                              <p className="px-3 py-3 text-xs text-neutral-500">
+                                No available check-in times for this date.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-3.5">
@@ -1216,13 +1515,12 @@ export default function BookingsHr() {
                             disabled={!allowed}
                             onClick={() => choosePackage(d)}
                             aria-pressed={active}
-                            className={`flex-1 rounded-xl border px-3 py-3 min-h-[44px] text-sm font-semibold transition ${
-                              !allowed
-                                ? "border-neutral-200 bg-neutral-50 text-neutral-300 cursor-not-allowed"
-                                : active
+                            className={`flex-1 rounded-xl border px-3 py-3 min-h-[44px] text-sm font-semibold transition ${!allowed
+                              ? "border-neutral-200 bg-neutral-50 text-neutral-300 cursor-not-allowed"
+                              : active
                                 ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E] ring-2 ring-[#D7A441]/20 cursor-pointer"
                                 : "border-neutral-200 bg-white text-neutral-700 hover:border-[#D7A441]/60 cursor-pointer"
-                            }`}
+                              }`}
                           >
                             {d} Hours
                           </button>

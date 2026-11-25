@@ -32,6 +32,9 @@ export default function Navbar() {
   const routerLocation = useLocation();
   const navigate = useNavigate();
   const isHome = routerLocation.pathname === "/";
+  const [stayType, setStayType] = useState(
+    () => sessionStorage.getItem("starlightStayType") || "full_day"
+  );
 
   const handleGoBack = () => {
     if (window.history.state && window.history.state.idx > 0) {
@@ -56,7 +59,20 @@ export default function Navbar() {
     setMobileMenuOpen(false);
     setUserMenuOpen(false);
   }, [routerLocation.pathname]);
+  // Sync stay type whenever it changes on Home page
+  useEffect(() => {
+    const syncStayType = () => {
+      setStayType(
+        sessionStorage.getItem("starlightStayType") || "full_day"
+      );
+    };
 
+    window.addEventListener("starlight:stay-type-change", syncStayType);
+
+    return () => {
+      window.removeEventListener("starlight:stay-type-change", syncStayType);
+    };
+  }, []);
   // Close user dropdown menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -73,7 +89,7 @@ export default function Navbar() {
 
   // Supabase Auth session management (deferred to idle to unblock first paint)
   useEffect(() => {
-    let unsubscribe = () => {};
+    let unsubscribe = () => { };
     let isMounted = true;
 
     const initAuth = async () => {
@@ -156,19 +172,19 @@ export default function Navbar() {
 
   const isBookActive =
     routerLocation.pathname.startsWith("/book-hotels") ||
-    routerLocation.pathname.startsWith("/availability");
+    routerLocation.pathname.startsWith("/availability") ||
+    routerLocation.pathname.startsWith("/hourly");
   const isAboutActive = routerLocation.pathname === "/about-us";
 
   return (
     <>
       <header
-        className={`w-full z-50 transition-all duration-300 ${
-          isHome
+        className={`w-full z-50 transition-all duration-300 ${isHome
             ? scrolled || mobileMenuOpen
               ? "fixed top-0 left-0 right-0 bg-[#0c0e12]/95 backdrop-blur-xl border-b border-white/10 shadow-2xl shadow-black/40 py-2.5 sm:py-3.5"
               : "absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 via-black/30 to-transparent py-3 sm:py-5 border-b border-transparent"
             : "sticky top-0 bg-[#0c0e12]/95 backdrop-blur-xl border-b border-white/10 shadow-xl shadow-black/30 py-2.5 sm:py-3.5"
-        }`}
+          }`}
       >
         <div className="relative z-50 mx-auto flex max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
 
@@ -206,23 +222,21 @@ export default function Navbar() {
             {/* Home */}
             <Link
               to="/"
-              className={`relative px-3.5 py-1.5 text-xs xl:text-[13px] font-medium tracking-wider uppercase transition-all duration-200 rounded-full ${
-                isHome
+              className={`relative px-3.5 py-1.5 text-xs xl:text-[13px] font-medium tracking-wider uppercase transition-all duration-200 rounded-full ${isHome
                   ? "text-[#F3CF7A] bg-[#D4A247]/15 font-semibold shadow-[0_0_12px_rgba(212,162,71,0.2)]"
                   : "text-white/75 hover:text-white hover:bg-white/5"
-              }`}
+                }`}
             >
               Home
             </Link>
 
             {/* Book Hotels */}
             <Link
-              to="/book-hotels"
-              className={`relative px-3.5 py-1.5 text-xs xl:text-[13px] font-medium tracking-wider uppercase transition-all duration-200 rounded-full ${
-                isBookActive
+              to={stayType === "hourly" ? "/hourly-availability" : "/book-hotels"}
+              className={`relative px-3.5 py-1.5 text-xs xl:text-[13px] font-medium tracking-wider uppercase transition-all duration-200 rounded-full ${isBookActive
                   ? "text-[#F3CF7A] bg-[#D4A247]/15 font-semibold shadow-[0_0_12px_rgba(212,162,71,0.2)]"
                   : "text-white/75 hover:text-white hover:bg-white/5"
-              }`}
+                }`}
             >
               Book Hotels
             </Link>
@@ -230,11 +244,10 @@ export default function Navbar() {
             {/* About Us */}
             <Link
               to="/about-us"
-              className={`relative px-3.5 py-1.5 text-xs xl:text-[13px] font-medium tracking-wider uppercase transition-all duration-200 rounded-full ${
-                isAboutActive
+              className={`relative px-3.5 py-1.5 text-xs xl:text-[13px] font-medium tracking-wider uppercase transition-all duration-200 rounded-full ${isAboutActive
                   ? "text-[#F3CF7A] bg-[#D4A247]/15 font-semibold shadow-[0_0_12px_rgba(212,162,71,0.2)]"
                   : "text-white/75 hover:text-white hover:bg-white/5"
-              }`}
+                }`}
             >
               About Us
             </Link>
@@ -292,9 +305,8 @@ export default function Navbar() {
                     </span>
                     <ChevronDown
                       size={14}
-                      className={`text-white/60 transition-transform duration-200 ${
-                        userMenuOpen ? "rotate-180 text-[#D4A247]" : ""
-                      }`}
+                      className={`text-white/60 transition-transform duration-200 ${userMenuOpen ? "rotate-180 text-[#D4A247]" : ""
+                        }`}
                     />
                   </button>
 
@@ -445,11 +457,10 @@ export default function Navbar() {
                 setUserMenuOpen(false);
                 setMobileMenuOpen((prev) => !prev);
               }}
-              className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full border transition active:scale-95 z-50 cursor-pointer ${
-                mobileMenuOpen
+              className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full border transition active:scale-95 z-50 cursor-pointer ${mobileMenuOpen
                   ? "bg-[#D7A441] border-[#D7A441] text-neutral-950 shadow-sm"
                   : "bg-white/10 hover:bg-white/15 border-white/15 text-white"
-              }`}
+                }`}
               aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             >
               {mobileMenuOpen ? <X size={17} className="stroke-[2.5]" /> : <Menu size={17} />}
@@ -505,11 +516,10 @@ export default function Navbar() {
                 <Link
                   to="/"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${
-                    isHome
+                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${isHome
                       ? "bg-gradient-to-r from-[#D4A247]/20 via-[#D4A247]/10 to-transparent border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
                       : "bg-white/[0.03] hover:bg-white/[0.07] border-white/10 text-white/90 hover:text-white font-medium"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${isHome ? "bg-[#D4A247] text-neutral-950 shadow-xs" : "bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15"}`}>
@@ -528,13 +538,12 @@ export default function Navbar() {
                 </Link>
 
                 <Link
-                  to="/book-hotels"
+                  to={stayType === "hourly" ? "/hourly-availability" : "/book-hotels"}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${
-                    isBookActive
+                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${isBookActive
                       ? "bg-gradient-to-r from-[#D4A247]/20 via-[#D4A247]/10 to-transparent border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
                       : "bg-white/[0.03] hover:bg-white/[0.07] border-white/10 text-white/90 hover:text-white font-medium"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${isBookActive ? "bg-[#D4A247] text-neutral-950 shadow-xs" : "bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15"}`}>
@@ -553,11 +562,10 @@ export default function Navbar() {
                 <Link
                   to="/about-us"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${
-                    isAboutActive
+                  className={`group flex items-center justify-between p-3 rounded-2xl border transition-all active:scale-[0.99] ${isAboutActive
                       ? "bg-gradient-to-r from-[#D4A247]/20 via-[#D4A247]/10 to-transparent border-[#D4A247]/40 text-[#F3CF7A] font-bold shadow-xs"
                       : "bg-white/[0.03] hover:bg-white/[0.07] border-white/10 text-white/90 hover:text-white font-medium"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${isAboutActive ? "bg-[#D4A247] text-neutral-950 shadow-xs" : "bg-white/10 text-white/70 group-hover:text-white group-hover:bg-white/15"}`}>

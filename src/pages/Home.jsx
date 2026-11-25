@@ -131,6 +131,7 @@ function Home() {
 
   useEffect(() => {
     sessionStorage.setItem("starlightStayType", stayType);
+    window.dispatchEvent(new Event("starlight:stay-type-change"));
   }, [stayType]);
   const [hotelImages, setHotelImages] = useState({});
   const [loading, setLoading] = useState(true);

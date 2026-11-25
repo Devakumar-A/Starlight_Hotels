@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -57,16 +57,16 @@ const capacityOptions = [
 ];
 
 // Package rules by check-in time:
-//  - exactly 12:00 PM  -> 6-hour package only
-//  - after 12:00 PM    -> 3-hour package only
-//  - before 12:00 PM   -> no restriction beyond the existing hourly API
-//    (availability + pricing from the API decide). Confirm if you have a stricter rule.
+// Until 1:00 PM (inclusive), both packages can be selected.
+// After 1:00 PM, only the 3-hour package is allowed.
 function getAllowedDurations(time) {
-  const [h, m] = String(time || "00:00").split(":").map(Number);
-  const minutes = (h || 0) * 60 + (m || 0);
-  if (minutes === 12 * 60) return [6];
-  if (minutes > 12 * 60) return [3];
-  return PACKAGES;
+  const [hours, minutes] = String(time || "00:00")
+    .split(":")
+    .map(Number);
+
+  const totalMinutes = hours * 60 + minutes;
+
+  return totalMinutes > 13 * 60 ? [3] : [3, 6];
 }
 
 function formatDateValue(date) {
@@ -207,7 +207,10 @@ export default function HourlyAvailableHotels() {
   const hotelId = searchParams.get("hotel") || "";
   const stayDate = searchParams.get("stayDate") || searchParams.get("date") || defaults.stayDate;
   const startTime = searchParams.get("startTime") || defaults.startTime;
-  const guests = Math.max(1, Number(searchParams.get("guests")) || 2);
+  const [guests, setGuests] = useState(
+    () => Math.max(1, Number(searchParams.get("guests")) || 2)
+  );
+  const pendingScrollRestore = useRef(null);
   const location =
     searchParams.get("location") || searchParams.get("destination") || searchParams.get("city") || "";
 
@@ -220,8 +223,8 @@ export default function HourlyAvailableHotels() {
     requestedDuration && allowedDurations.includes(requestedDuration)
       ? requestedDuration
       : allowedDurations.length === 1
-      ? allowedDurations[0]
-      : null;
+        ? allowedDurations[0]
+        : null;
   const activeDurations = selectedDuration ? [selectedDuration] : allowedDurations;
 
   const updateParams = useCallback(
@@ -241,7 +244,10 @@ export default function HourlyAvailableHotels() {
           }
           return next;
         },
-        { replace: true }
+        {
+          replace: true,
+          preventScrollReset: true,
+        }
       );
     },
     [setSearchParams]
@@ -251,14 +257,13 @@ export default function HourlyAvailableHotels() {
   const handleTimeChange = (next) => {
     const allowed = getAllowedDurations(next);
     const updates = { startTime: next };
+
     if (requestedDuration && !allowed.includes(requestedDuration)) {
       updates.duration = allowed.length === 1 ? allowed[0] : "";
     }
-    setPkgChoice({});
-    setPkgHint({});
+
     updateParams(updates);
   };
-
   // A pasted / old URL with an invalid time + package combo is corrected in the URL
   useEffect(() => {
     if (requestedDuration && !allowedDurations.includes(requestedDuration)) {
@@ -280,11 +285,19 @@ export default function HourlyAvailableHotels() {
   const [priceMax, setPriceMax] = useState(null); // null = no upper limit
   const [minCapacity, setMinCapacity] = useState(0);
   const [cityQuery, setCityQuery] = useState("");
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [guestPickerOpen, setGuestPickerOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date(`${stayDate}T12:00:00`);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
   const [sortBy, setSortBy] = useState("recommended");
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef(null);
   const mobileSortRef = useRef(null);
+  const filterScrollRef = useRef(null);
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState(() =>
@@ -295,8 +308,6 @@ export default function HourlyAvailableHotels() {
 
   const [expandedRooms, setExpandedRooms] = useState({});
   const [expandedDescriptions, setExpandedDescriptions] = useState({});
-  const [pkgChoice, setPkgChoice] = useState({});
-  const [pkgHint, setPkgHint] = useState({});
 
   // ---- view mode / toast / outside click ----
   useEffect(() => {
@@ -351,6 +362,13 @@ export default function HourlyAvailableHotels() {
           setEnabledHotels((all || []).filter((h) => h.is_hourly_active === true));
         }
       } catch (err) {
+        console.log("Hourly API error:", {
+  hotel: hotel.name,
+  stayDate,
+  startTime,
+  durationHours: d,
+  error: error.message,
+});
         console.error("HOURLY HOTELS LOAD ERROR:", err);
         if (!cancelled) {
           setError(err.message || "Unable to load hourly availability.");
@@ -389,14 +407,16 @@ export default function HourlyAvailableHotels() {
           !searchLocation || searchLocation === "all"
             ? enabledHotels
             : enabledHotels.filter((hotel) =>
-                [hotel.hotel_name, hotel.city, hotel.address, hotel.location]
-                  .filter(Boolean)
-                  .map(normalizeLocation)
-                  .some((v) => v.includes(searchLocation) || searchLocation.includes(v))
-              );
+              [hotel.hotel_name, hotel.city, hotel.address, hotel.location]
+                .filter(Boolean)
+                .map(normalizeLocation)
+                .some((v) => v.includes(searchLocation) || searchLocation.includes(v))
+            );
 
         const toCheck = hotelId ? filtered.filter((h) => h.id === hotelId) : filtered;
-        const durations = selectedDuration ? [selectedDuration] : PACKAGES;
+        const durations = selectedDuration
+  ? [selectedDuration]
+  : (startTime >= "13:00" ? [3] : [3, 6]);
 
         const settled = await Promise.all(
           toCheck.map(async (hotel) => {
@@ -406,6 +426,12 @@ export default function HourlyAvailableHotels() {
                 Promise.all(
                   durations.map(async (d) => {
                     try {
+                      console.log("Hourly API request:", {
+                        hotel: hotel.hotel_name,
+                        stayDate,
+                        startTime,
+                        durationHours: d,
+                      });
                       const data = await getAvailabilityV2({
                         hotelId: hotel.id,
                         stayType: "hourly",
@@ -433,9 +459,17 @@ export default function HourlyAvailableHotels() {
                       );
                       return [d, priced];
                     } catch (err) {
-                      console.error(`HOURLY ${d}H AVAILABILITY ERROR: ${hotel.hotel_name}`, err);
-                      return [d, []];
-                    }
+  console.error("HOURLY AVAILABILITY FAILED:", {
+    hotel: hotel.hotel_name,
+    date: stayDate,
+    time: startTime,
+    duration: d,
+    code: err?.code,
+    message: err?.message,
+  });
+
+  return [d, []];
+}
                   })
                 ),
               ]);
@@ -587,6 +621,43 @@ export default function HourlyAvailableHotels() {
   const selectedHotel = hotelId ? enabledHotels?.find((h) => h.id === hotelId) : null;
   const slots = getStartSlots(stayDate, startTime);
   const today = formatDateValue(new Date());
+  const calendarDays = (() => {
+    const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const offset = (first.getDay() + 6) % 7;
+    const start = new Date(first);
+    start.setDate(first.getDate() - offset);
+    return Array.from({ length: 42 }, (_, i) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      return day;
+    });
+  })();
+  const monthLabel = calendarMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const changeGuests = (delta) => {
+    setGuests((prev) => Math.max(1, Math.min(20, prev + delta)));
+  };
+
+  useLayoutEffect(() => {
+    const savedPosition = pendingScrollRestore.current;
+
+    if (savedPosition === null) return;
+
+    window.scrollTo({
+      top: savedPosition,
+      left: 0,
+      behavior: "auto",
+    });
+
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: savedPosition,
+        left: 0,
+        behavior: "auto",
+      });
+
+      pendingScrollRestore.current = null;
+    });
+  }, [guests]);
   const startLabel = formatTime12(startTime);
   const guestLabel = `${guests} ${guests === 1 ? "guest" : "guests"}`;
 
@@ -648,11 +719,10 @@ export default function HourlyAvailableHotels() {
           key={o.value}
           type="button"
           onClick={() => setMinCapacity(o.value)}
-          className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
-            minCapacity === o.value
-              ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E]"
-              : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60"
-          }`}
+          className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer ${minCapacity === o.value
+            ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E]"
+            : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60"
+            }`}
         >
           {o.label}
         </button>
@@ -667,10 +737,8 @@ export default function HourlyAvailableHotels() {
   const startHour = Number(startTime.split(":")[0]) || 0;
   const startMinutes = startHour * 60 + (Number(startTime.split(":")[1]) || 0);
   const packageNote =
-    startMinutes === 12 * 60
-      ? "Only the 6-hour package is available for a 12:00 PM check-in."
-      : startMinutes > 12 * 60
-      ? "Only the 3-hour package is available after 12:00 PM."
+    startMinutes > 13 * 60
+      ? "Only the 3-hour package is available after 1:00 PM."
       : "";
 
   const sectionTitle = "mb-2.5 text-[11px] font-bold uppercase tracking-wider text-neutral-400";
@@ -679,26 +747,117 @@ export default function HourlyAvailableHotels() {
     <div className="space-y-6">
       <section className="space-y-3">
         <h3 className={sectionTitle}>Stay date</h3>
-        <Field icon={Calendar} label="Stay Date">
-          <input
-            type="date"
-            className={inputClass}
-            min={today}
-            value={stayDate}
-            onChange={(e) => e.target.value && e.target.value >= today && updateParams({ stayDate: e.target.value })}
-          />
-        </Field>
+        <div className="relative">
+          <button type="button" onClick={() => { setDatePickerOpen((v) => !v); setTimePickerOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl border bg-white px-3 py-3 text-left transition ${datePickerOpen ? "border-[#D7A441] ring-2 ring-[#D7A441]/15" : "border-[#F2E8DC] hover:border-[#D7A441]"}`}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FAF3E7] text-[#C5922C]"><Calendar size={17} /></span>
+            <span className="min-w-0 flex-1"><span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Stay Date</span><span className="block text-sm font-bold text-[#0B1527]">{new Date(`${stayDate}T12:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></span>
+            <ChevronDown size={16} className={`text-neutral-400 transition-transform ${datePickerOpen ? "rotate-180" : ""}`} />
+          </button>
+          {datePickerOpen && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-2 w-full rounded-2xl border border-[#EADBCC] bg-white p-2 lg:p-2 shadow-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalendarMonth(
+                      (m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)
+                    )
+                  }
+                  disabled={
+                    calendarMonth.getFullYear() === new Date(`${today}T12:00:00`).getFullYear() &&
+                    calendarMonth.getMonth() <= new Date(`${today}T12:00:00`).getMonth()
+                  }
+                  className="rounded-full border border-[#EADBCC] p-2 text-neutral-600 disabled:opacity-30"
+                >
+                  <ArrowLeft size={14} />
+                </button>
+
+                <span className="text-sm font-bold text-[#0B1527]">
+                  {monthLabel}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalendarMonth(
+                      (m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)
+                    )
+                  }
+                  className="rounded-full border border-[#EADBCC] p-1.5 text-neutral-600"
+                >
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+
+              <div className="mb-2 grid grid-cols-7 text-center text-[10px] font-bold text-neutral-400">
+                {["MO", "TU", "WE", "TH", "FR", "SA", "SU"].map((d) => (
+                  <span key={d}>{d}</span>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-y-1">
+                {calendarDays.map((day) => {
+                  const value = formatDateValue(day);
+                  const inMonth = day.getMonth() === calendarMonth.getMonth();
+                  const disabled = value < today;
+                  const selected = value === stayDate;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        updateParams({ stayDate: value });
+                        setDatePickerOpen(false);
+                      }}
+                      className={`mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${selected
+                        ? "bg-[#C5922C] font-bold text-white shadow-sm"
+                        : disabled
+                          ? "cursor-not-allowed text-neutral-300"
+                          : inMonth
+                            ? "text-[#0B1527] hover:bg-[#FAF3E7]"
+                            : "text-neutral-300 hover:bg-[#FAF3E7]"
+                        }`}
+                    >
+                      {day.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 flex justify-between border-t border-[#F2E8DC] pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateParams({ stayDate: today });
+                    setCalendarMonth(new Date(`${today}T12:00:00`));
+                    setDatePickerOpen(false);
+                  }}
+                  className="text-xs font-semibold text-[#B88428]"
+                >
+                  Today
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDatePickerOpen(false)}
+                  className="text-xs font-semibold text-neutral-500"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="space-y-3">
         <h3 className={sectionTitle}>Check-in time</h3>
-        <Field icon={Clock} label="Check-in Time">
-          <select className={inputClass} value={startTime} onChange={(e) => handleTimeChange(e.target.value)}>
-            {slots.map((sl) => (
-              <option key={sl} value={sl}>{formatTime12(sl)}</option>
-            ))}
-          </select>
-        </Field>
+        <div className="relative">
+          <button type="button" onClick={() => { setTimePickerOpen((v) => !v); setDatePickerOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl border bg-white px-3 py-3 text-left transition ${timePickerOpen ? "border-[#D7A441] ring-2 ring-[#D7A441]/15" : "border-[#F2E8DC] hover:border-[#D7A441]"}`}><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FAF3E7] text-[#C5922C]"><Clock size={17} /></span><span className="min-w-0 flex-1"><span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Check-in Time</span><span className="block text-sm font-bold text-[#0B1527]">{formatTime12(startTime)}</span></span><ChevronDown size={16} className={`text-neutral-400 transition-transform ${timePickerOpen ? "rotate-180" : ""}`} /></button>
+          {timePickerOpen && <div className="absolute left-0 right-0 top-full z-40 mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-[#EADBCC] bg-white p-3 shadow-xl">{slots.map((sl) => <button key={sl} type="button" onClick={() => { handleTimeChange(sl); setTimePickerOpen(false); }} className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${sl === startTime ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E]" : "border-[#EADBCC] text-[#0B1527] hover:border-[#D7A441]"}`}>{formatTime12(sl)}</button>)}</div>}
+        </div>
       </section>
 
       <section>
@@ -713,13 +872,12 @@ export default function HourlyAvailableHotels() {
                 type="button"
                 disabled={disabled}
                 onClick={() => updateParams({ duration: d ?? "" })}
-                className={`flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                  disabled
-                    ? "border-neutral-200 bg-neutral-50 text-neutral-300 cursor-not-allowed"
-                    : active
+                className={`flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition ${disabled
+                  ? "border-neutral-200 bg-neutral-50 text-neutral-300 cursor-not-allowed"
+                  : active
                     ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E] cursor-pointer"
                     : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60 cursor-pointer"
-                }`}
+                  }`}
               >
                 {d ? `${d} Hours` : "Both"}
               </button>
@@ -731,13 +889,10 @@ export default function HourlyAvailableHotels() {
 
       <section className="space-y-3">
         <h3 className={sectionTitle}>Guests</h3>
-        <Field icon={Users} label="Guests">
-          <select className={inputClass} value={guests} onChange={(e) => updateParams({ guests: e.target.value })}>
-            {Array.from({ length: Math.max(10, guests) }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>{n} {n === 1 ? "Guest" : "Guests"}</option>
-            ))}
-          </select>
-        </Field>
+        <div className="rounded-2xl border border-[#F2E8DC] bg-white p-3">
+          <button type="button" onClick={() => setGuestPickerOpen((v) => !v)} className="flex w-full items-center gap-3 text-left"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FAF3E7] text-[#C5922C]"><Users size={17} /></span><span className="min-w-0 flex-1"><span className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Guests & Occupancy</span><span className="block text-sm font-bold text-[#0B1527]">{guestLabel}</span></span><ChevronDown size={16} className={`text-neutral-400 transition-transform ${guestPickerOpen ? "rotate-180" : ""}`} /></button>
+          {guestPickerOpen && <div className="mt-3 border-t border-[#F2E8DC] pt-3"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#0B1527]">Guests</p><p className="text-[10px] text-neutral-400">Total people staying</p></div><div className="flex items-center gap-3"><button type="button" disabled={guests <= 1} onClick={() => changeGuests(-1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#EADBCC] text-neutral-600 disabled:opacity-30">−</button><span className="w-4 text-center text-sm font-bold">{guests}</span><button type="button" disabled={guests >= 20} onClick={() => changeGuests(1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#EADBCC] text-neutral-600 disabled:opacity-30">+</button></div></div><button type="button" onClick={() => setGuestPickerOpen(false)} className="mt-3 w-full rounded-xl bg-[#C5922C] py-2.5 text-xs font-bold text-white">Done</button></div>}
+        </div>
       </section>
 
       <section>
@@ -757,9 +912,8 @@ export default function HourlyAvailableHotels() {
                 key={c ?? "all"}
                 type="button"
                 onClick={() => updateParams({ location: c ?? "", hotel: "" })}
-                className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
-                  active ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E]" : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60"
-                }`}
+                className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer ${active ? "border-[#D7A441] bg-[#FAF5EB] text-[#966A1E]" : "border-[#EADBCC] bg-white text-neutral-700 hover:border-[#D7A441]/60"
+                  }`}
               >
                 {c ?? "All Locations"}
               </button>
@@ -799,11 +953,10 @@ export default function HourlyAvailableHotels() {
                 setSortBy(option.value);
                 setSortOpen(false);
               }}
-              className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer ${
-                isSelected
-                  ? "bg-[#FAF5EB] text-[#966A1E] font-bold border border-[#D7A441]/25"
-                  : "text-neutral-700 hover:bg-neutral-50 font-medium"
-              }`}
+              className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer ${isSelected
+                ? "bg-[#FAF5EB] text-[#966A1E] font-bold border border-[#D7A441]/25"
+                : "text-neutral-700 hover:bg-neutral-50 font-medium"
+                }`}
             >
               <div>
                 <p className={`text-xs sm:text-sm ${isSelected ? "font-bold text-neutral-950" : "font-medium text-neutral-800"}`}>
@@ -853,7 +1006,7 @@ export default function HourlyAvailableHotels() {
           </div>
 
           {/* display-only summary: updates automatically from the filters */}
-          <div className="grid flex-1 min-w-0 gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="hidden lg:grid flex-1 min-w-0 gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">
             {summaryCards}
           </div>
         </div>
@@ -911,7 +1064,7 @@ export default function HourlyAvailableHotels() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8 pb-28">
           {/* LEFT SIDEBAR (desktop) + LISTING */}
           <div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-start">
-            <aside className="hidden lg:block lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto rounded-3xl border border-[#EADBCC] bg-[#FFFDF9] shadow-[0_4px_24px_rgba(11,21,39,0.04)]">
+            <aside ref={filterScrollRef} className="hidden lg:block lg:sticky lg:top-4 rounded-3xl border border-[#EADBCC] bg-[#FFFDF9] shadow-[0_4px_24px_rgba(11,21,39,0.04)]">
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#F2E8DC] bg-[#FFFDF9] px-5 py-4">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FAF3E7] text-[#C5922C]">
@@ -933,351 +1086,312 @@ export default function HourlyAvailableHotels() {
 
             <div className="min-w-0">
 
-          {/* MOBILE FILTER & SORT ROW */}
-          <div className="grid grid-cols-2 gap-3 mb-5 lg:hidden">
-            <button
-              type="button"
-              onClick={() => setMobileFiltersOpen(true)}
-              className="flex items-center justify-between h-11 px-3.5 rounded-2xl border border-[#F2E8DC] bg-white text-xs font-bold text-[#0B1527] shadow-sm hover:border-[#D7A441] active:scale-[0.98] transition cursor-pointer"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#FAF3E7] text-[#C5922C]">
-                  <SlidersHorizontal size={13} />
-                </div>
-                <span className="truncate">Filter Stays</span>
-              </div>
-              {activeFilterCount > 0 && (
-                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C5922C] px-1.5 text-[10px] font-bold text-white shrink-0">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            <div ref={mobileSortRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setSortOpen(!sortOpen)}
-                className={`flex items-center justify-between w-full h-11 px-3.5 rounded-2xl border bg-white text-xs font-bold text-[#0B1527] shadow-sm active:scale-[0.98] transition cursor-pointer ${
-                  sortOpen ? "border-[#D7A441] ring-2 ring-[#D7A441]/20" : "border-[#F2E8DC] hover:border-[#D7A441]"
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#FAF3E7] text-[#C5922C]">
-                    <ArrowUpDown size={13} />
-                  </div>
-                  <span className="truncate">{sortOptions.find((o) => o.value === sortBy)?.label}</span>
-                </div>
-                <ChevronDown size={14} className={`text-neutral-400 shrink-0 transition-transform ${sortOpen ? "rotate-180 text-[#C5922C]" : ""}`} />
-              </button>
-              {sortOpen && sortDropdown("w-64 max-w-[calc(100vw-2rem)]")}
-            </div>
-          </div>
-
-          {/* AVAILABLE STAYS TOOLBAR */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-neutral-200/70">
-            <div className="min-w-0">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1527] font-serif">
-                Available Stays
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <p className="text-xs sm:text-sm text-neutral-500 font-medium">
-                  Showing {visibleHotels.length} {visibleHotels.length === 1 ? "property" : "properties"}
-                </p>
-                {selectedHotel && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#D7A441]/15 border border-[#D7A441]/30 px-2.5 py-0.5 text-[11px] font-semibold text-[#8B651B]">
-                    <span>Hotel: {selectedHotel.hotel_name}</span>
-                    <button type="button" onClick={() => updateParams({ hotel: "" })} className="hover:text-black p-0.5 cursor-pointer" title="Show all hotels">
-                      <X size={12} />
-                    </button>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0 ml-auto">
-              <div ref={sortRef} className="relative hidden lg:block">
+              {/* MOBILE FILTER & SORT ROW */}
+              <div className="grid grid-cols-2 gap-3 mb-5 lg:hidden">
                 <button
                   type="button"
-                  onClick={() => setSortOpen(!sortOpen)}
-                  className={`group flex items-center gap-2 rounded-full border bg-white px-4 py-2 transition-all cursor-pointer ${
-                    sortOpen ? "border-[#D7A441] ring-2 ring-[#D7A441]/20 shadow-md" : "border-neutral-200/90 hover:border-[#D7A441]/50"
-                  }`}
-                  aria-label="Sort stays"
-                  aria-expanded={sortOpen}
+                  onClick={() => setMobileFiltersOpen(true)}
+                  className="flex items-center justify-between h-11 px-3.5 rounded-2xl border border-[#F2E8DC] bg-white text-xs font-bold text-[#0B1527] shadow-sm hover:border-[#D7A441] active:scale-[0.98] transition cursor-pointer"
                 >
-                  <ArrowUpDown size={13} className="text-[#C59A45]" />
-                  <span className="text-xs font-semibold text-neutral-700">
-                    SORT: <span className="font-bold text-neutral-900">{sortOptions.find((o) => o.value === sortBy)?.label}</span>
-                  </span>
-                  <ChevronDown size={13} className={`text-neutral-400 transition-transform ${sortOpen ? "rotate-180 text-[#C59A45]" : ""}`} />
-                </button>
-                {sortOpen && sortDropdown("w-64")}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("grid")}
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition cursor-pointer active:scale-95 ${
-                    isGrid ? "bg-[#C59A45] text-white" : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
-                  }`}
-                  title="Grid view"
-                  aria-label="Grid view"
-                >
-                  <LayoutGrid size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleListViewClick}
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition cursor-pointer active:scale-95 ${
-                    !isGrid ? "bg-[#C59A45] text-white" : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
-                  }`}
-                  title="List view"
-                  aria-label="List view"
-                >
-                  <List size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50/60 p-4 text-xs sm:text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {/* HOTEL CARDS */}
-          <div className={isGrid ? "grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6" : "space-y-6"}>
-            {visibleHotels.map((hotel) => {
-              const hotelImage = hotelImages[hotel.id];
-              const rating = getStarlightRating(hotel.id);
-              const picked0 = pkgChoice[hotel.id];
-              const chosen =
-                selectedDuration ??
-                (picked0 && allowedDurations.includes(picked0) ? picked0 : null);
-              const chosenPkg = chosen ? hotel.view[chosen] : null;
-              const canContinue = Boolean(
-                chosen && allowedDurations.includes(chosen) && chosenPkg && chosenPkg.rooms.length > 0 && chosenPkg.price
-              );
-              const expanded = Boolean(expandedRooms[hotel.id]);
-              const chips = expanded ? hotel.roomChips : hotel.roomChips.slice(0, roomLimit);
-
-              const detailsHref = `/hourly/hotel/${hotel.id}?stayType=hourly&stayDate=${encodeURIComponent(
-                stayDate
-              )}&startTime=${encodeURIComponent(startTime)}&duration=${encodeURIComponent(
-                chosen ?? ""
-              )}&guests=${encodeURIComponent(guests)}`;
-
-              return (
-                <article
-                  key={hotel.id}
-                  className={`group rounded-[28px] border border-[#EADBCC] bg-[#FFFDF9] shadow-[0_4px_24px_rgba(11,21,39,0.04)] hover:shadow-[0_20px_48px_rgba(11,21,39,0.08)] hover:border-[#D7A441]/50 transition-all duration-300 p-4 sm:p-5 flex flex-col ${
-                    isGrid ? "" : "md:flex-row gap-5 lg:gap-7 items-stretch"
-                  }`}
-                >
-                  {/* IMAGE */}
-                  <div
-                    className={`relative shrink-0 overflow-hidden rounded-2xl bg-[#FAF6F0] ${
-                      isGrid
-                        ? "w-full aspect-[16/10] max-h-[220px] mb-4"
-                        : "w-full h-[200px] sm:h-[220px] mb-4 md:mb-0 md:w-[36%] md:h-auto md:min-h-[220px]"
-                    }`}
-                  >
-                    {hotelImage ? (
-                      <img
-                        src={hotelImage}
-                        alt={hotel.hotel_name}
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                        decoding="async"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FAF6F0] to-[#EFEAE1] text-neutral-400">
-                        <span className="px-3 text-center text-xs font-bold uppercase tracking-widest">{hotel.hotel_name}</span>
-                      </div>
-                    )}
-                    {hotel.city && (
-                      <div className="absolute top-3 left-3 z-10">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0B1527]/85 backdrop-blur-md px-3 py-1.5 text-xs font-bold text-white border border-white/20 shadow-md">
-                          <MapPin size={11} className="text-[#D7A441]" />
-                          <span>{hotel.city}</span>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* DETAILS */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-1.5 font-medium text-neutral-600 text-xs sm:text-[13px] min-w-0">
-                          <MapPin size={14} className="text-[#C59A45] shrink-0" />
-                          <span className="truncate">{hotel.city}{hotel.address ? `, ${hotel.address}` : ""}</span>
-                        </div>
-                        <div className="inline-flex items-center gap-1.5 shrink-0">
-                          <Star size={15} className="fill-[#E5A93C] text-[#E5A93C]" />
-                          <span className="text-sm font-bold text-[#0B1527]">{rating.score}</span>
-                          <span className="text-xs text-neutral-500">({rating.reviews})</span>
-                        </div>
-                      </div>
-
-                      <h3 className="mt-1.5 text-xl sm:text-2xl font-bold font-serif tracking-tight text-[#0B1527] group-hover:text-[#B88428] transition-colors">
-                        {hotel.hotel_name}
-                      </h3>
-
-                      {hotel.description && (
-                        <div className="mt-1.5 text-xs sm:text-[13px] leading-relaxed text-[#556377]">
-                          <p className={expandedDescriptions[hotel.id] ? "" : "line-clamp-2"}>{hotel.description}</p>
-                          {hotel.description.length > 95 && (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedDescriptions((p) => ({ ...p, [hotel.id]: !p[hotel.id] }))}
-                              className="mt-1 text-[11px] font-semibold text-[#B88428] hover:text-[#966A1E] inline-flex items-center gap-0.5 cursor-pointer"
-                              aria-expanded={Boolean(expandedDescriptions[hotel.id])}
-                            >
-                              <span>{expandedDescriptions[hotel.id] ? "Show less" : "More description"}</span>
-                              {expandedDescriptions[hotel.id] ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ROOMS FOR YOUR SLOT */}
-                      <div className="mt-3.5 pt-3 border-t border-[#F2E8DC]">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[11px] font-bold tracking-wider text-neutral-400 uppercase">
-                            Rooms for your slot
-                          </span>
-                          <span className="text-xs font-bold text-[#C59A45]">
-                            {hotel.roomChips.length} {hotel.roomChips.length === 1 ? "Option" : "Options"}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {chips.map((room) => (
-                            <div
-                              key={room.id}
-                              className="inline-flex items-center gap-2 rounded-xl border border-[#EADBCC] bg-[#FFFDF9] px-3 py-1.5 text-xs font-medium text-[#0B1527] hover:border-[#C59A45]/60 hover:bg-[#FAF6ED] transition"
-                            >
-                              <BedDouble size={14} className="text-[#C59A45]" />
-                              <span className="font-semibold">{room.name}</span>
-                              <span className="text-neutral-500 text-[11px]">• {room.left} left</span>
-                            </div>
-                          ))}
-                          {hotel.roomChips.length > roomLimit && (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedRooms((p) => ({ ...p, [hotel.id]: !p[hotel.id] }))}
-                              className="inline-flex items-center gap-1 rounded-xl border border-[#EADBCC] bg-[#FFFDF9] hover:bg-[#F7F2E8] hover:border-[#D7A441]/60 px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 hover:text-[#966A1E] transition cursor-pointer active:scale-95"
-                              aria-expanded={expanded}
-                            >
-                              <span>{expanded ? "Show less" : `+${hotel.roomChips.length - roomLimit} more`}</span>
-                              {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#FAF3E7] text-[#C5922C]">
+                      <SlidersHorizontal size={13} />
                     </div>
+                    <span className="truncate">Filter Stays</span>
+                  </div>
+                  {activeFilterCount > 0 && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C5922C] px-1.5 text-[10px] font-bold text-white shrink-0">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
 
-                    {/* PRICES + CTA */}
-                    <div className="mt-4 pt-3.5 border-t border-[#F2E8DC]">
-                      <div className="flex items-center justify-between gap-2.5 sm:gap-4">
-                        <div className="flex items-stretch gap-2 min-w-0 flex-1">
-                          {activeDurations.map((d) => {
-                            const pkg = hotel.view[d];
-                            const bookable = pkg.rooms.length > 0 && pkg.price > 0;
-                            const picked = chosen === d;
-                            const interactive = !selectedDuration && bookable;
-                            const body = (
-                              <>
-                                <span className={`block text-base sm:text-xl font-bold tracking-tight leading-tight ${bookable ? "text-[#0B1527]" : "text-neutral-400"}`}>
-                                  {bookable ? `₹${pkg.price.toLocaleString("en-IN")}` : "—"}
-                                </span>
-                                <span className="block text-[10px] sm:text-[11px] font-semibold text-[#B88428] mt-0.5">
-                                  {d} Hours{!bookable ? " · Unavailable" : ""}
-                                </span>
-                              </>
-                            );
-                            const tileClass = `min-w-0 flex-1 max-w-[150px] rounded-xl border px-2.5 sm:px-3.5 py-1.5 text-center transition ${
-                              picked
-                                ? "border-[#D7A441] bg-[#FAF5EB] ring-2 ring-[#D7A441]/25"
-                                : "border-[#EADBCC] bg-white"
-                            } ${bookable ? "" : "opacity-60"}`;
-                            return interactive ? (
-                              <button
-                                key={d}
-                                type="button"
-                                aria-pressed={picked}
-                                onClick={() => {
-                                  setPkgChoice((p) => ({ ...p, [hotel.id]: d }));
-                                  setPkgHint((p) => ({ ...p, [hotel.id]: false }));
-                                }}
-                                className={`${tileClass} cursor-pointer hover:border-[#D7A441]`}
-                              >
-                                {body}
-                              </button>
-                            ) : (
-                              <div key={d} className={tileClass}>{body}</div>
-                            );
-                          })}
-                        </div>
+                <div ref={mobileSortRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSortOpen(!sortOpen)}
+                    className={`flex items-center justify-between w-full h-11 px-3.5 rounded-2xl border bg-white text-xs font-bold text-[#0B1527] shadow-sm active:scale-[0.98] transition cursor-pointer ${sortOpen ? "border-[#D7A441] ring-2 ring-[#D7A441]/20" : "border-[#F2E8DC] hover:border-[#D7A441]"
+                      }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#FAF3E7] text-[#C5922C]">
+                        <ArrowUpDown size={13} />
+                      </div>
+                      <span className="truncate">{sortOptions.find((o) => o.value === sortBy)?.label}</span>
+                    </div>
+                    <ChevronDown size={14} className={`text-neutral-400 shrink-0 transition-transform ${sortOpen ? "rotate-180 text-[#C5922C]" : ""}`} />
+                  </button>
+                  {sortOpen && sortDropdown("w-64 max-w-[calc(100vw-2rem)]")}
+                </div>
+              </div>
 
-                        {canContinue ? (
-                          <Link
-                            to={detailsHref}
-                            className="shrink-0 rounded-full bg-[#0B1527] hover:bg-[#162744] text-[#F3CF7A] px-3.5 sm:px-6 py-2.5 text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap active:scale-[0.98]"
-                          >
-                            <span>View Hotel</span>
-                            <ArrowRight size={14} className="stroke-[2.5]" />
-                          </Link>
+              {/* AVAILABLE STAYS TOOLBAR */}
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-neutral-200/70">
+                <div className="min-w-0">
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1527] font-serif">
+                    Available Stays
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <p className="text-xs sm:text-sm text-neutral-500 font-medium">
+                      Showing {visibleHotels.length} {visibleHotels.length === 1 ? "property" : "properties"}
+                    </p>
+                    {selectedHotel && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#D7A441]/15 border border-[#D7A441]/30 px-2.5 py-0.5 text-[11px] font-semibold text-[#8B651B]">
+                        <span>Hotel: {selectedHotel.hotel_name}</span>
+                        <button type="button" onClick={() => updateParams({ hotel: "" })} className="hover:text-black p-0.5 cursor-pointer" title="Show all hotels">
+                          <X size={12} />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 ml-auto">
+                  <div ref={sortRef} className="relative hidden lg:block">
+                    <button
+                      type="button"
+                      onClick={() => setSortOpen(!sortOpen)}
+                      className={`group flex items-center gap-2 rounded-full border bg-white px-4 py-2 transition-all cursor-pointer ${sortOpen ? "border-[#D7A441] ring-2 ring-[#D7A441]/20 shadow-md" : "border-neutral-200/90 hover:border-[#D7A441]/50"
+                        }`}
+                      aria-label="Sort stays"
+                      aria-expanded={sortOpen}
+                    >
+                      <ArrowUpDown size={13} className="text-[#C59A45]" />
+                      <span className="text-xs font-semibold text-neutral-700">
+                        SORT: <span className="font-bold text-neutral-900">{sortOptions.find((o) => o.value === sortBy)?.label}</span>
+                      </span>
+                      <ChevronDown size={13} className={`text-neutral-400 transition-transform ${sortOpen ? "rotate-180 text-[#C59A45]" : ""}`} />
+                    </button>
+                    {sortOpen && sortDropdown("w-64")}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl transition cursor-pointer active:scale-95 ${isGrid ? "bg-[#C59A45] text-white" : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
+                        }`}
+                      title="Grid view"
+                      aria-label="Grid view"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleListViewClick}
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl transition cursor-pointer active:scale-95 ${!isGrid ? "bg-[#C59A45] text-white" : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
+                        }`}
+                      title="List view"
+                      aria-label="List view"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="mb-6 rounded-2xl border border-red-200 bg-red-50/60 p-4 text-xs sm:text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              {/* HOTEL CARDS */}
+              <div className={isGrid ? "grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6" : "space-y-6"}>
+                {visibleHotels.map((hotel) => {
+                  const hotelImage = hotelImages[hotel.id];
+                  const rating = getStarlightRating(hotel.id);
+                  // Keep "Both" as Both when no individual package was selected.
+                  // A single package is passed only when the user explicitly selected it
+                  // or the check-in time restricts the available package choices.
+                  const chosen = selectedDuration ?? (allowedDurations.length === 1 ? allowedDurations[0] : null);
+                  const expanded = Boolean(expandedRooms[hotel.id]);
+                  const chips = expanded ? hotel.roomChips : hotel.roomChips.slice(0, roomLimit);
+
+                  const detailsHref = `/hourly/hotel/${hotel.id}?stayType=hourly&stayDate=${encodeURIComponent(
+                    stayDate
+                  )}&startTime=${encodeURIComponent(startTime)}&duration=${encodeURIComponent(
+                    chosen ?? "both"
+                  )}&guests=${encodeURIComponent(guests)}`;
+
+                  return (
+                    <article
+                      key={hotel.id}
+                      className={`group rounded-[28px] border border-[#EADBCC] bg-[#FFFDF9] shadow-[0_4px_24px_rgba(11,21,39,0.04)] hover:shadow-[0_20px_48px_rgba(11,21,39,0.08)] hover:border-[#D7A441]/50 transition-all duration-300 p-4 sm:p-5 flex flex-col ${isGrid ? "" : "md:flex-row gap-5 lg:gap-7 items-stretch"
+                        }`}
+                    >
+                      {/* IMAGE */}
+                      <div
+                        className={`relative shrink-0 overflow-hidden rounded-2xl bg-[#FAF6F0] ${isGrid
+                          ? "w-full aspect-[16/10] max-h-[220px] mb-4"
+                          : "w-full h-[200px] sm:h-[220px] mb-4 md:mb-0 md:w-[36%] md:h-auto md:min-h-[220px]"
+                          }`}
+                      >
+                        {hotelImage ? (
+                          <img
+                            src={hotelImage}
+                            alt={hotel.hotel_name}
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                            decoding="async"
+                            loading="lazy"
+                          />
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => setPkgHint((p) => ({ ...p, [hotel.id]: true }))}
-                            className="shrink-0 rounded-full bg-[#0B1527]/80 text-[#F3CF7A] px-3.5 sm:px-6 py-2.5 text-xs sm:text-sm font-semibold shadow-md flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap cursor-pointer"
-                          >
-                            <span>View Hotel</span>
-                            <ArrowRight size={14} className="stroke-[2.5]" />
-                          </button>
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FAF6F0] to-[#EFEAE1] text-neutral-400">
+                            <span className="px-3 text-center text-xs font-bold uppercase tracking-widest">{hotel.hotel_name}</span>
+                          </div>
+                        )}
+                        {hotel.city && (
+                          <div className="absolute top-3 left-3 z-10">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0B1527]/85 backdrop-blur-md px-3 py-1.5 text-xs font-bold text-white border border-white/20 shadow-md">
+                              <MapPin size={11} className="text-[#D7A441]" />
+                              <span>{hotel.city}</span>
+                            </span>
+                          </div>
                         )}
                       </div>
-                      {pkgHint[hotel.id] && !canContinue && (
-                        <p className="mt-2 text-[11px] font-semibold text-amber-700">
-                          Choose a 3 or 6 hour package to continue.
-                        </p>
-                      )}
-                      <p className="mt-1.5 text-[11px] text-neutral-400">
-                        {startLabel}
-                        {chosen ? ` – ${formatTime12(startTime, chosen)}` : ""} • + taxes &amp; fees
-                      </p>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
 
-          {/* EMPTY STATE */}
-          {!error && visibleHotels.length === 0 && (
-            <div className="rounded-3xl border border-neutral-200/90 bg-white p-10 sm:p-14 text-center shadow-sm">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#D7A441]/10 border border-[#D7A441]/20 text-[#B88428]">
-                <Clock size={26} />
+                      {/* DETAILS */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-1.5 font-medium text-neutral-600 text-xs sm:text-[13px] min-w-0">
+                              <MapPin size={14} className="text-[#C59A45] shrink-0" />
+                              <span className="truncate">{hotel.city}{hotel.address ? `, ${hotel.address}` : ""}</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 shrink-0">
+                              <Star size={15} className="fill-[#E5A93C] text-[#E5A93C]" />
+                              <span className="text-sm font-bold text-[#0B1527]">{rating.score}</span>
+                              <span className="text-xs text-neutral-500">({rating.reviews})</span>
+                            </div>
+                          </div>
+
+                          <h3 className="mt-1.5 text-xl sm:text-2xl font-bold font-serif tracking-tight text-[#0B1527] group-hover:text-[#B88428] transition-colors">
+                            {hotel.hotel_name}
+                          </h3>
+
+                          {hotel.description && (
+                            <div className="mt-1.5 text-xs sm:text-[13px] leading-relaxed text-[#556377]">
+                              <p className={expandedDescriptions[hotel.id] ? "" : "line-clamp-2"}>{hotel.description}</p>
+                              {hotel.description.length > 95 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedDescriptions((p) => ({ ...p, [hotel.id]: !p[hotel.id] }))}
+                                  className="mt-1 text-[11px] font-semibold text-[#B88428] hover:text-[#966A1E] inline-flex items-center gap-0.5 cursor-pointer"
+                                  aria-expanded={Boolean(expandedDescriptions[hotel.id])}
+                                >
+                                  <span>{expandedDescriptions[hotel.id] ? "Show less" : "More description"}</span>
+                                  {expandedDescriptions[hotel.id] ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ROOMS FOR YOUR SLOT */}
+                          <div className="mt-3.5 pt-3 border-t border-[#F2E8DC]">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[11px] font-bold tracking-wider text-neutral-400 uppercase">
+                                Rooms for your slot
+                              </span>
+                              <span className="text-xs font-bold text-[#C59A45]">
+                                {hotel.roomChips.length} {hotel.roomChips.length === 1 ? "Option" : "Options"}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {chips.map((room) => (
+                                <div
+                                  key={room.id}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-[#EADBCC] bg-[#FFFDF9] px-3 py-1.5 text-xs font-medium text-[#0B1527] hover:border-[#C59A45]/60 hover:bg-[#FAF6ED] transition"
+                                >
+                                  <BedDouble size={14} className="text-[#C59A45]" />
+                                  <span className="font-semibold">{room.name}</span>
+                                  <span className="text-neutral-500 text-[11px]">• {room.left} left</span>
+                                </div>
+                              ))}
+                              {hotel.roomChips.length > roomLimit && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedRooms((p) => ({ ...p, [hotel.id]: !p[hotel.id] }))}
+                                  className="inline-flex items-center gap-1 rounded-xl border border-[#EADBCC] bg-[#FFFDF9] hover:bg-[#F7F2E8] hover:border-[#D7A441]/60 px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 hover:text-[#966A1E] transition cursor-pointer active:scale-95"
+                                  aria-expanded={expanded}
+                                >
+                                  <span>{expanded ? "Show less" : `+${hotel.roomChips.length - roomLimit} more`}</span>
+                                  {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PRICES + CTA */}
+                        <div className="mt-4 pt-3.5 border-t border-[#F2E8DC]">
+                          <div className="flex items-center justify-between gap-2.5 sm:gap-4">
+                            <div className="flex items-stretch gap-2 min-w-0 flex-1">
+                              {activeDurations.map((d) => {
+                                const pkg = hotel.view[d];
+                                const bookable = pkg.rooms.length > 0 && pkg.price > 0;
+                                const picked = selectedDuration === d;
+                                const body = (
+                                  <>
+                                    <span className={`block text-base sm:text-xl font-bold tracking-tight leading-tight ${bookable ? "text-[#0B1527]" : "text-neutral-400"}`}>
+                                      {bookable ? `₹${pkg.price.toLocaleString("en-IN")}` : "—"}
+                                    </span>
+                                    <span className="block text-[10px] sm:text-[11px] font-semibold text-[#B88428] mt-0.5">
+                                      {d} Hours{!bookable ? " · Unavailable" : ""}
+                                    </span>
+                                  </>
+                                );
+                                const tileClass = `min-w-0 flex-1 max-w-[150px] rounded-xl border px-2.5 sm:px-3.5 py-1.5 text-center transition ${picked
+                                  ? "border-[#D7A441] bg-[#FAF5EB] ring-2 ring-[#D7A441]/25"
+                                  : "border-[#EADBCC] bg-white"
+                                  } ${bookable ? "" : "opacity-60"}`;
+                                return (
+                                  <div key={d} className={tileClass}>
+                                    {body}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <Link
+                              to={detailsHref}
+                              className="shrink-0 rounded-full bg-[#0B1527] hover:bg-[#162744] text-[#F3CF7A] px-3.5 sm:px-6 py-2.5 text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap active:scale-[0.98]"
+                            >
+                              <span>View Hotel</span>
+                              <ArrowRight size={14} className="stroke-[2.5]" />
+                            </Link>
+                          </div>
+                          <p className="mt-1.5 text-[11px] text-neutral-400">
+                            {startLabel}
+                            {chosen ? ` – ${formatTime12(startTime, chosen)}` : ""} • + taxes &amp; fees
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
-              <h3 className="mt-4 text-lg sm:text-xl font-bold text-neutral-900">No Hourly Stays Available</h3>
-              <p className="mt-2 text-xs sm:text-sm text-neutral-500 max-w-sm mx-auto">
-                Nothing matches {stayDate.split("-").reverse().join("-")} at {startLabel}
-                {selectedDuration ? ` for ${selectedDuration} hours` : ""} with your filters. Try another time, package or destination.
-              </p>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-6 rounded-xl bg-gradient-to-r from-[#D7A441] to-[#C5922C] px-6 py-2.5 text-xs sm:text-sm font-bold text-neutral-950 shadow-md hover:brightness-110 active:scale-95 transition cursor-pointer"
-              >
-                Reset Filters
-              </button>
+
+              {/* EMPTY STATE */}
+              {!error && visibleHotels.length === 0 && (
+                <div className="rounded-3xl border border-neutral-200/90 bg-white p-10 sm:p-14 text-center shadow-sm">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#D7A441]/10 border border-[#D7A441]/20 text-[#B88428]">
+                    <Clock size={26} />
+                  </div>
+                  <h3 className="mt-4 text-lg sm:text-xl font-bold text-neutral-900">No Hourly Stays Available</h3>
+                  <p className="mt-2 text-xs sm:text-sm text-neutral-500 max-w-sm mx-auto">
+                    Nothing matches {stayDate.split("-").reverse().join("-")} at {startLabel}
+                    {selectedDuration ? ` for ${selectedDuration} hours` : ""} with your filters. Try another time, package or destination.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="mt-6 rounded-xl bg-gradient-to-r from-[#D7A441] to-[#C5922C] px-6 py-2.5 text-xs sm:text-sm font-bold text-neutral-950 shadow-md hover:brightness-110 active:scale-95 transition cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-          </div>
           </div>
         </div>
       </main>
