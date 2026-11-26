@@ -544,7 +544,7 @@ function Availability() {
       ) || 1
     );
 
-    const hasAvailData = availability.length > 0 && hotelAvail.length > 0;
+    const hasAvailData = !loadingAvailability;
 
     // Merge availability inventory and pricing into room categories
     const categoriesWithInventory = hotelCategories.map((cat) => {
@@ -695,7 +695,7 @@ function Availability() {
 
         // Date availability filter: exclude properties known to have 0 rooms available for selected stay
         const pricingInfo = getHotelPricingInfo(hotel.id);
-        const hasAvailData = availability.length > 0;
+        const hasAvailData = !loadingAvailability;
         if (hasAvailData && checkIn && checkOut) {
           if (!pricingInfo.hasAvailableRooms) {
             return false;
@@ -856,8 +856,8 @@ function Availability() {
                 type="button"
                 onClick={() => setSortOpen(!sortOpen)}
                 className={`flex items-center justify-between w-full h-11 px-3.5 rounded-2xl border bg-white text-xs font-bold text-[#0B1527] shadow-sm active:scale-98 transition cursor-pointer ${sortOpen
-                    ? "border-[#D7A441] ring-2 ring-[#D7A441]/20"
-                    : "border-[#F2E8DC] hover:border-[#D7A441]"
+                  ? "border-[#D7A441] ring-2 ring-[#D7A441]/20"
+                  : "border-[#F2E8DC] hover:border-[#D7A441]"
                   }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -896,8 +896,8 @@ function Availability() {
                             setSortOpen(false);
                           }}
                           className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer ${isSelected
-                              ? "bg-[#FAF5EB] text-[#966A1E] font-bold border border-[#D7A441]/25 shadow-xs"
-                              : "text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 font-medium"
+                            ? "bg-[#FAF5EB] text-[#966A1E] font-bold border border-[#D7A441]/25 shadow-xs"
+                            : "text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 font-medium"
                             }`}
                         >
                           <div>
@@ -956,8 +956,8 @@ function Availability() {
                   type="button"
                   onClick={() => setSortOpen(!sortOpen)}
                   className={`group flex items-center gap-2 rounded-full border bg-white px-4 py-2 text-left shadow-2xs transition-all duration-200 cursor-pointer ${sortOpen
-                      ? "border-[#D7A441] ring-2 ring-[#D7A441]/20 shadow-md"
-                      : "border-neutral-200/90 hover:border-[#D7A441]/50 hover:shadow-xs"
+                    ? "border-[#D7A441] ring-2 ring-[#D7A441]/20 shadow-md"
+                    : "border-neutral-200/90 hover:border-[#D7A441]/50 hover:shadow-xs"
                     }`}
                   aria-label="Sort stays"
                   aria-expanded={sortOpen}
@@ -995,8 +995,8 @@ function Availability() {
                               setSortOpen(false);
                             }}
                             className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer ${isSelected
-                                ? "bg-[#FAF5EB] text-[#966A1E] font-bold border border-[#D7A441]/25 shadow-xs"
-                                : "text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 font-medium"
+                              ? "bg-[#FAF5EB] text-[#966A1E] font-bold border border-[#D7A441]/25 shadow-xs"
+                              : "text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 font-medium"
                               }`}
                           >
                             <div>
@@ -1027,8 +1027,8 @@ function Availability() {
                   type="button"
                   onClick={() => setViewMode("grid")}
                   className={`flex h-9 w-9 items-center justify-center rounded-xl transition cursor-pointer active:scale-95 ${viewMode === "grid"
-                      ? "bg-[#C59A45] text-white shadow-xs"
-                      : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
+                    ? "bg-[#C59A45] text-white shadow-xs"
+                    : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
                     }`}
                   title="Grid view"
                   aria-label="Grid view"
@@ -1039,8 +1039,8 @@ function Availability() {
                   type="button"
                   onClick={handleListViewClick}
                   className={`flex h-9 w-9 items-center justify-center rounded-xl transition cursor-pointer active:scale-95 ${viewMode === "list"
-                      ? "bg-[#C59A45] text-white shadow-xs"
-                      : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
+                    ? "bg-[#C59A45] text-white shadow-xs"
+                    : "border border-neutral-200/90 bg-white text-neutral-600 hover:bg-neutral-50"
                     }`}
                   title="List view"
                   aria-label="List view"
@@ -1084,17 +1084,9 @@ function Availability() {
               } = pricingInfo;
 
               // Determine categories to display for party
-              const partyCategories =
-                eligibleCategories.length > 0
-                  ? eligibleCategories
-                  : accommodatingCategories.length > 0
-                    ? accommodatingCategories
-                    : availableCategories;
+              const partyCategories = eligibleCategories;
 
-              const displayedCategories =
-                partyCategories.length > 0
-                  ? partyCategories
-                  : categoriesWithInventory;
+              const displayedCategories = eligibleCategories;
 
               const hotelImage = hotelImages[hotel.id];
               const starlightRating = getStarlightRating(hotel.id);
@@ -1110,8 +1102,8 @@ function Availability() {
                     {/* 1. REAL HOTEL IMAGE (38% Width on Desktop, Rounded-2xl, Destination Pill & Favorite Heart) */}
                     <div
                       className={`relative shrink-0 overflow-hidden rounded-2xl bg-[#FAF6F0] flex items-center justify-center transition-all duration-300 ${viewMode === "grid"
-                          ? "w-full aspect-[16/10] sm:aspect-[4/3] max-h-[260px] mb-4"
-                          : "w-full md:w-[38%] h-[230px] sm:h-[260px] md:h-auto md:min-h-[260px] md:self-stretch"
+                        ? "w-full aspect-[16/10] sm:aspect-[4/3] max-h-[260px] mb-4"
+                        : "w-full md:w-[38%] h-[230px] sm:h-[260px] md:h-auto md:min-h-[260px] md:self-stretch"
                         }`}
                     >
                       {hotelImage ? (
@@ -1316,8 +1308,8 @@ function Availability() {
                             )}&checkOut=${encodeURIComponent(
                               checkOut
                             )}&guests=${encodeURIComponent(guests)}${searchParams.get("rooms")
-                                ? `&rooms=${encodeURIComponent(searchParams.get("rooms"))}`
-                                : ""
+                              ? `&rooms=${encodeURIComponent(searchParams.get("rooms"))}`
+                              : ""
                               }`}
                             className="rounded-full bg-[#0B1527] hover:bg-[#162744] text-[#F3CF7A] px-6 py-2.5 text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 cursor-pointer mt-1"
                           >

@@ -1117,25 +1117,13 @@ function HotelDetails() {
   // ROOM AVAILABILITY
   // =======================================================
 
-  function getAvailableRooms(category) {
-    const result = availability.find(
-      (item) =>
-        item.room_category_id === category.id
-    );
+function getAvailableRooms(category) {
+  const result = availability.find(
+    (item) => item.room_category_id === category.id
+  );
 
-    if (result) {
-      return Number(
-        result.available_rooms ?? 0
-      );
-    }
-
-    if (roomsLoading) {
-      return Number(category.total_rooms || 0);
-    }
-
-    return Number(category.total_rooms || 0);
-  }
-
+  return Number(result?.available_rooms ?? 0);
+}
 
   function getTotalRooms(category) {
     const result = availability.find(
